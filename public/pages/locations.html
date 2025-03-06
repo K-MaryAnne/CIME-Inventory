@@ -1,0 +1,320 @@
+<!-- public/pages/locations.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Locations | CIME Nairobi</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css">
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="../css/main.css">
+  <link rel="stylesheet" href="../css/dashboard.css">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+    <div class="container-fluid">
+      <button class="btn btn-dark d-md-none" id="sidebarToggle">
+        <i class="fas fa-bars"></i>
+      </button>
+      <a class="navbar-brand ms-2" href="dashboard.html">
+        <i class="fas fa-hospital me-2"></i>
+        CIME Nairobi
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+              <i class="fas fa-user-circle me-2"></i>
+              <span id="userName">User</span>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#profileModal"><i class="fas fa-id-card me-2"></i>Profile</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="#" id="logoutBtn"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid">
+    <div class="row">
+      <!-- Sidebar -->
+      <nav id="sidebar" class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
+        <div class="position-sticky pt-3">
+          <ul class="nav flex-column">
+            <li class="nav-item">
+              <a class="nav-link" href="dashboard.html">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="inventory.html">
+                <i class="fas fa-boxes"></i> Inventory
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="scanner.html">
+                <i class="fas fa-qrcode"></i> Scanner
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link active" href="locations.html">
+                <i class="fas fa-map-marker-alt"></i> Locations
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="suppliers.html">
+                <i class="fas fa-truck"></i> Suppliers
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="reports.html">
+                <i class="fas fa-chart-bar"></i> Reports
+              </a>
+            </li>
+            <li class="nav-item admin-only d-none">
+              <a class="nav-link" href="users.html">
+                <i class="fas fa-users-cog"></i> Users
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="settings.html">
+                <i class="fas fa-cog"></i> Settings
+              </a>
+            </li>
+          </ul>
+        </div>
+      </nav>
+
+      <!-- Main content -->
+      <main class="main-content col-md-9 ms-sm-auto col-lg-10 px-md-4">
+        <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+          <h1 class="h2"><i class="fas fa-map-marker-alt me-2"></i>Location Management</h1>
+          <div class="btn-toolbar mb-2 mb-md-0">
+            <div class="dropdown me-2">
+              <button class="btn btn-sm btn-outline-primary dropdown-toggle manager-only" type="button" id="addLocationDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-plus me-1"></i> Add Location
+              </button>
+              <ul class="dropdown-menu" aria-labelledby="addLocationDropdown">
+                <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#locationModal" data-type="Room">Add Room</a></li>
+                <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#locationModal" data-type="Rack">Add Rack</a></li>
+                <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#locationModal" data-type="Shelf">Add Shelf</a></li>
+              </ul>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="expandAllBtn">
+              <i class="fas fa-expand-alt me-1"></i> Expand All
+            </button>
+          </div>
+        </div>
+
+        <!-- Alert container -->
+        <div id="alertContainer"></div>
+        
+        <!-- Location Structure Visualization -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5 class="card-title mb-0">Location Structure</h5>
+          </div>
+          <div class="card-body">
+            <div id="locationTree">
+              <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2 mb-0">Loading locations...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Location Statistics -->
+        <div class="row row-cols-1 row-cols-md-2 row-cols-xl-4 g-4 mb-4">
+          <div class="col">
+            <div class="card h-100">
+              <div class="card-body">
+                <div class="d-flex align-items-start">
+                  <div class="dashboard-icon bg-primary-light text-primary">
+                    <i class="fas fa-door-open fa-2x"></i>
+                  </div>
+                  <div class="ms-auto text-end">
+                    <h5 class="card-title">Rooms</h5>
+                    <p class="card-value" id="roomsCount">-</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col">
+            <div class="card h-100">
+              <div class="card-body">
+                <div class="d-flex align-items-start">
+                  <div class="dashboard-icon bg-success-light text-success">
+                    <i class="fas fa-th-large fa-2x"></i>
+                  </div>
+                  <div class="ms-auto text-end">
+                    <h5 class="card-title">Racks</h5>
+                    <p class="card-value" id="racksCount">-</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col">
+            <div class="card h-100">
+              <div class="card-body">
+                <div class="d-flex align-items-start">
+                  <div class="dashboard-icon bg-info-light text-info">
+                    <i class="fas fa-stream fa-2x"></i>
+                  </div>
+                  <div class="ms-auto text-end">
+                    <h5 class="card-title">Shelves</h5>
+                    <p class="card-value" id="shelvesCount">-</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col">
+            <div class="card h-100">
+              <div class="card-body">
+                <div class="d-flex align-items-start">
+                  <div class="dashboard-icon bg-warning-light text-warning">
+                    <i class="fas fa-boxes fa-2x"></i>
+                  </div>
+                  <div class="ms-auto text-end">
+                    <h5 class="card-title">Total Items</h5>
+                    <p class="card-value" id="totalItems">-</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Room Usage Table -->
+        <div class="card mb-4">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Room Usage Statistics</h5>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle m-0">
+              <thead class="bg-light">
+                <tr>
+                  <th>Room Name</th>
+                  <th>Items Count</th>
+                  <th>Item Categories</th>
+                  <th>Total Value</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="roomStatsTable">
+                <tr>
+                  <td colspan="5" class="text-center">Loading room statistics...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  
+  <!-- Location Modal -->
+  <div class="modal fade" id="locationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="locationModalTitle">Add Location</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="locationForm">
+            <input type="hidden" id="locationId">
+            <input type="hidden" id="locationType">
+            
+            <div class="mb-3">
+              <label for="locationName" class="form-label">Name*</label>
+              <input type="text" class="form-control" id="locationName" required>
+            </div>
+            
+            <div class="mb-3" id="parentLocationGroup">
+              <label for="parentLocation" class="form-label">Parent Location*</label>
+              <select class="form-select" id="parentLocation" required>
+                <option value="">Select Parent Location</option>
+                <!-- Will be populated from API -->
+              </select>
+              <div class="form-text" id="parentLocationHelp">
+                Select the parent location for this new location.
+              </div>
+            </div>
+            
+            <div class="mb-3">
+              <label for="locationDescription" class="form-label">Description</label>
+              <textarea class="form-control" id="locationDescription" rows="3"></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary" id="saveLocationBtn">Save Location</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Profile Modal -->
+  <div class="modal fade" id="profileModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">User Profile</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="text-center mb-4">
+            <div class="avatar bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+              <i class="fas fa-user fa-2x"></i>
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" id="profileName" readonly>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" id="profileEmail" readonly>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label">Role</label>
+            <input type="text" class="form-control" id="profileRole" readonly>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Custom JS -->
+  <script src="../js/main.js"></script>
+  <script src="../js/locations.js"></script>
+</body>
+</html>

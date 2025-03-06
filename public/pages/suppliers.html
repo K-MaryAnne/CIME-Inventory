@@ -1,0 +1,289 @@
+<!-- public/pages/suppliers.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suppliers | CIME Nairobi</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css">
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="../css/main.css">
+  <link rel="stylesheet" href="../css/dashboard.css">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+    <div class="container-fluid">
+      <button class="btn btn-dark d-md-none" id="sidebarToggle">
+        <i class="fas fa-bars"></i>
+      </button>
+      <a class="navbar-brand ms-2" href="dashboard.html">
+        <i class="fas fa-hospital me-2"></i>
+        CIME Nairobi
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+              <i class="fas fa-user-circle me-2"></i>
+              <span id="userName">User</span>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#profileModal"><i class="fas fa-id-card me-2"></i>Profile</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="#" id="logoutBtn"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid">
+    <div class="row">
+      <!-- Sidebar -->
+      <nav id="sidebar" class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
+        <div class="position-sticky pt-3">
+          <ul class="nav flex-column">
+            <li class="nav-item">
+              <a class="nav-link" href="dashboard.html">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="inventory.html">
+                <i class="fas fa-boxes"></i> Inventory
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="scanner.html">
+                <i class="fas fa-qrcode"></i> Scanner
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="locations.html">
+                <i class="fas fa-map-marker-alt"></i> Locations
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link active" href="suppliers.html">
+                <i class="fas fa-truck"></i> Suppliers
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="reports.html">
+                <i class="fas fa-chart-bar"></i> Reports
+              </a>
+            </li>
+            <li class="nav-item admin-only d-none">
+              <a class="nav-link" href="users.html">
+                <i class="fas fa-users-cog"></i> Users
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="settings.html">
+                <i class="fas fa-cog"></i> Settings
+              </a>
+            </li>
+          </ul>
+        </div>
+      </nav>
+
+      <!-- Main content -->
+      <main class="main-content col-md-9 ms-sm-auto col-lg-10 px-md-4">
+        <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+          <h1 class="h2"><i class="fas fa-truck me-2"></i>Supplier Management</h1>
+          <div class="btn-toolbar mb-2 mb-md-0">
+            <div class="btn-group me-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="exportBtn">
+                <i class="fas fa-file-export me-1"></i> Export
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="printBtn">
+                <i class="fas fa-print me-1"></i> Print
+              </button>
+            </div>
+            <button type="button" class="btn btn-sm btn-primary manager-only" id="addSupplierBtn" data-bs-toggle="modal" data-bs-target="#supplierModal">
+              <i class="fas fa-plus me-1"></i> Add Supplier
+            </button>
+          </div>
+        </div>
+
+        <!-- Alert container -->
+        <div id="alertContainer"></div>
+        
+        <!-- Search Bar -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-6">
+                <div class="input-group">
+                  <span class="input-group-text"><i class="fas fa-search"></i></span>
+                  <input type="text" class="form-control" id="searchInput" placeholder="Search suppliers...">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Suppliers Table -->
+        <div class="card mb-4">
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover align-middle m-0">
+                <thead class="bg-light">
+                  <tr>
+                    <th>Supplier Name</th>
+                    <th>Contact Person</th>
+                    <th>Contact Info</th>
+                    <th>Address</th>
+                    <th>Items Supplied</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="suppliersTable">
+                  <tr>
+                    <td colspan="6" class="text-center">Loading suppliers...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  
+  <!-- Supplier Modal -->
+  <div class="modal fade" id="supplierModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="supplierModalTitle">Add Supplier</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="supplierForm">
+            <input type="hidden" id="supplierId">
+            
+            <div class="mb-3">
+              <label for="supplierName" class="form-label">Supplier Name*</label>
+              <input type="text" class="form-control" id="supplierName" required>
+            </div>
+            
+            <div class="mb-3">
+              <label for="contactPerson" class="form-label">Contact Person</label>
+              <input type="text" class="form-control" id="contactPerson">
+            </div>
+            
+            <div class="mb-3">
+              <label for="supplierEmail" class="form-label">Email</label>
+              <input type="email" class="form-control" id="supplierEmail">
+            </div>
+            
+            <div class="mb-3">
+              <label for="supplierPhone" class="form-label">Phone</label>
+              <input type="text" class="form-control" id="supplierPhone">
+            </div>
+            
+            <div class="mb-3">
+              <label for="supplierAddress" class="form-label">Address</label>
+              <textarea class="form-control" id="supplierAddress" rows="3"></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary" id="saveSupplierBtn">Save Supplier</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Supplier Items Modal -->
+  <div class="modal fade" id="supplierItemsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="supplierItemsModalTitle">Supplier Items</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle m-0">
+              <thead class="bg-light">
+                <tr>
+                  <th>Item Name</th>
+                  <th>Category</th>
+                  <th>Quantity</th>
+                  <th>Status</th>
+                  <th>Unit Cost</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="supplierItemsTable">
+                <tr>
+                  <td colspan="6" class="text-center">Loading items...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Profile Modal -->
+  <div class="modal fade" id="profileModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">User Profile</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="text-center mb-4">
+            <div class="avatar bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+              <i class="fas fa-user fa-2x"></i>
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" id="profileName" readonly>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" id="profileEmail" readonly>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label">Role</label>
+            <input type="text" class="form-control" id="profileRole" readonly>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Sweet Alert -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <!-- Custom JS -->
+  <script src="../js/main.js"></script>
+  <script src="../js/suppliers.js"></script>
+</body>
+</html>

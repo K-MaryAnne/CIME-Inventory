@@ -1,0 +1,222 @@
+/* public/css/main.css */
+:root {
+    --primary-color: #00843d;
+    --primary-dark: #006830;
+    --primary-light: #4caf78;
+    --secondary-color: #424242;
+    --text-color: #333333;
+    --border-color: #e0e0e0;
+    --success-color: #28a745;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --info-color: #17a2b8;
+  }
+  
+  /* Override Bootstrap primary color */
+  .btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+  }
+  
+  .btn-primary:hover, .btn-primary:active, .btn-primary:focus {
+    background-color: var(--primary-dark) !important;
+    border-color: var(--primary-dark) !important;
+  }
+  
+  .text-primary {
+    color: var(--primary-color) !important;
+  }
+  
+  .bg-primary {
+    background-color: var(--primary-color) !important;
+  }
+  
+  .border-primary {
+    border-color: var(--primary-color) !important;
+  }
+  
+  /* Custom Styles */
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: var(--text-color);
+  }
+  
+  .navbar-brand {
+    font-weight: 700;
+    color: var(--primary-color) !important;
+  }
+  
+  .sidebar {
+    min-height: calc(100vh - 56px);
+    background-color: #f8f9fa;
+    border-right: 1px solid var(--border-color);
+  }
+  
+  .sidebar .nav-link {
+    color: var(--secondary-color);
+    padding: 0.75rem 1.25rem;
+    border-radius: 0;
+  }
+  
+  .sidebar .nav-link:hover {
+    background-color: rgba(0, 132, 61, 0.1);
+  }
+  
+  .sidebar .nav-link.active {
+    color: #fff;
+    background-color: var(--primary-color);
+  }
+  
+  .sidebar .nav-link i {
+    width: 20px;
+    margin-right: 10px;
+    text-align: center;
+  }
+  
+  .card {
+    border-radius: 10px;
+    overflow: hidden;
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  }
+  
+  .card-header {
+    background-color: #fff;
+    border-bottom: 1px solid var(--border-color);
+    padding: 1rem 1.25rem;
+  }
+  
+  .table th {
+    font-weight: 600;
+    background-color: #f8f9fa;
+  }
+  
+  .action-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+  }
+  
+  .status-badge {
+    padding: 0.35em 0.65em;
+    font-size: 0.75em;
+    font-weight: 700;
+    border-radius: 1rem;
+    text-transform: uppercase;
+  }
+  
+  .status-available {
+    background-color: rgba(40, 167, 69, 0.15);
+    color: #28a745;
+  }
+  
+  .status-maintenance {
+    background-color: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+  }
+  
+  .status-outofstock {
+    background-color: rgba(220, 53, 69, 0.15);
+    color: #dc3545;
+  }
+  
+  .status-rented {
+    background-color: rgba(23, 162, 184, 0.15);
+    color: #17a2b8;
+  }
+  
+  /* Dashboard Styles */
+  .dashboard-card {
+    border-radius: 10px;
+    overflow: hidden;
+    transition: transform 0.3s;
+  }
+  
+  .dashboard-card:hover {
+    transform: translateY(-5px);
+  }
+  
+  .dashboard-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+  }
+  
+  .dashboard-card .card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  
+  .dashboard-card .card-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0;
+  }
+  
+  /* Scanner Styles */
+  #scanner-container {
+    max-width: 500px;
+    margin: 0 auto;
+  }
+  
+  #reader {
+    width: 100%;
+    overflow: hidden;
+    border-radius: 10px;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  }
+  
+  /* Responsive Adjustments */
+  @media (max-width: 768px) {
+    .sidebar {
+      min-height: auto;
+      border-right: none;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .card-body {
+      padding: 1rem;
+    }
+    
+    .dashboard-icon {
+      width: 45px;
+      height: 45px;
+    }
+    
+    .dashboard-card .card-value {
+      font-size: 1.5rem;
+    }
+  }
+  
+  /* Animation for alerts */
+  .fade-in {
+    animation: fadeIn 0.3s;
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* Dashboard specific styles */
+  .dashboard-table th, .dashboard-table td {
+    padding: 0.5rem 0.75rem;
+    vertical-align: middle;
+  }
+  
+  
