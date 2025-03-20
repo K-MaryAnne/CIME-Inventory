@@ -32,6 +32,8 @@ app.use('/api/locations', require('./routes/locationRoutes'));
 app.use('/api/suppliers', require('./routes/supplierRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
 
+
+
 // Serve index.html for any other routes (for frontend routing)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));

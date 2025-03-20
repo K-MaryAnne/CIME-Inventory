@@ -108,6 +108,8 @@ const createItem = async (req, res) => {
       category,
       description,
       serialNumber,
+      barcode,
+      barcodeType, // New field: 'existing' or 'generate'
       location,
       quantity,
       unit,
@@ -120,12 +122,35 @@ const createItem = async (req, res) => {
       notes
     } = req.body;
     
-    // Generate a unique barcode
-    const timestamp = Date.now().toString();
-    const barcode = `CIME-${timestamp.substring(timestamp.length - 6)}`;
+    let itemBarcode;
+    let barcodeImageUrl = null;
     
-    // Generate QR code
-    const qrCodeDataUrl = await QRCode.toDataURL(barcode);
+    // Handle barcode based on type
+    if (barcodeType === 'existing' && barcode && barcode.trim() !== '') {
+      // Check if the existing barcode is already in use
+      const existingItem = await Item.findOne({ barcode });
+      if (existingItem) {
+        return res.status(400).json({ 
+          message: 'This barcode is already assigned to another item' 
+        });
+      }
+      
+      // Use the existing manufacturer barcode (no image needed)
+      itemBarcode = barcode;
+    } else {
+      // Generate a unique barcode for the system
+      const prefix = 'CIME';
+      const timestamp = Date.now().toString();
+      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      itemBarcode = `${prefix}-${timestamp.substring(timestamp.length - 6)}-${random}`;
+      
+      // Generate a barcode image
+      try {
+        barcodeImageUrl = await QRCode.toDataURL(itemBarcode);
+      } catch (err) {
+        console.error('Error generating barcode image:', err);
+      }
+    }
     
     // Create the item
     const newItem = await Item.create({
@@ -133,7 +158,9 @@ const createItem = async (req, res) => {
       category,
       description,
       serialNumber,
-      barcode,
+      barcode: itemBarcode,
+      barcodeType: barcodeType || 'generate',
+      barcodeImageUrl,
       location,
       quantity,
       unit,
@@ -143,19 +170,8 @@ const createItem = async (req, res) => {
       manufacturer,
       status: status || 'Available',
       purchaseDate,
-      imageUrl: qrCodeDataUrl,
       notes,
       createdBy: req.user._id
-    });
-    
-    // Create a transaction record
-    await Transaction.create({
-      item: newItem._id,
-      type: 'Restock',
-      quantity,
-      toLocation: location.room,
-      performedBy: req.user._id,
-      notes: 'Initial inventory addition'
     });
     
     res.status(201).json(newItem);
@@ -172,76 +188,115 @@ const updateItem = async (req, res) => {
   try {
     const item = await Item.findById(req.params.id);
     
-    if (item) {
-      // Check if quantity has changed
-      const oldQuantity = item.quantity;
-      const newQuantity = req.body.quantity ? parseInt(req.body.quantity) : oldQuantity;
-      
-      // Update item fields
-      item.name = req.body.name || item.name;
-      item.category = req.body.category || item.category;
-      item.description = req.body.description || item.description;
-      item.serialNumber = req.body.serialNumber || item.serialNumber;
-      item.location = req.body.location || item.location;
-      item.quantity = newQuantity;
-      item.unit = req.body.unit || item.unit;
-      item.unitCost = req.body.unitCost || item.unitCost;
-      item.reorderLevel = req.body.reorderLevel || item.reorderLevel;
-      item.supplier = req.body.supplier || item.supplier;
-      item.manufacturer = req.body.manufacturer || item.manufacturer;
-      item.status = req.body.status || item.status;
-      item.lastMaintenanceDate = req.body.lastMaintenanceDate || item.lastMaintenanceDate;
-      item.nextMaintenanceDate = req.body.nextMaintenanceDate || item.nextMaintenanceDate;
-      item.purchaseDate = req.body.purchaseDate || item.purchaseDate;
-      item.notes = req.body.notes || item.notes;
-      item.updatedAt = Date.now();
-      
-      const updatedItem = await item.save();
-      
-      // Create transaction if quantity changed
-      if (newQuantity !== oldQuantity) {
-        await Transaction.create({
-          item: updatedItem._id,
-          type: newQuantity > oldQuantity ? 'Restock' : 'Check-out',
-          quantity: Math.abs(newQuantity - oldQuantity),
-          toLocation: newQuantity > oldQuantity ? updatedItem.location.room : null,
-          fromLocation: newQuantity < oldQuantity ? updatedItem.location.room : null,
-          performedBy: req.user._id,
-          notes: `Quantity updated from ${oldQuantity} to ${newQuantity}`
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    
+    // Check if barcode is being changed
+    const newBarcodeType = req.body.barcodeType;
+    const newBarcode = req.body.barcode;
+    
+    // If changing to an existing barcode, verify it's not already in use
+    if (newBarcodeType === 'existing' && newBarcode && newBarcode !== item.barcode) {
+      const existingItem = await Item.findOne({ barcode: newBarcode });
+      if (existingItem && existingItem._id.toString() !== req.params.id) {
+        return res.status(400).json({ 
+          message: 'This barcode is already assigned to another item' 
         });
+      }
+    }
+    
+    // Generate a new barcode if requested
+    let barcodeImageUrl = item.barcodeImageUrl;
+    
+    if (newBarcodeType === 'generate' && (!item.barcodeType || item.barcodeType === 'existing')) {
+      // Generate a new system barcode
+      const prefix = 'CIME';
+      const timestamp = Date.now().toString();
+      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      const newSystemBarcode = `${prefix}-${timestamp.substring(timestamp.length - 6)}-${random}`;
+      
+      // Generate a barcode image
+      try {
+        barcodeImageUrl = await QRCode.toDataURL(newSystemBarcode);
+        req.body.barcode = newSystemBarcode;
+      } catch (err) {
+        console.error('Error generating barcode image:', err);
+      }
+    } else if (newBarcodeType === 'existing') {
+      // Clear the image URL for existing barcodes
+      barcodeImageUrl = null;
+    }
+    
+    // Check if quantity has changed
+    const oldQuantity = item.quantity;
+    const newQuantity = req.body.quantity ? parseInt(req.body.quantity) : oldQuantity;
+    
+    // Update item fields
+    item.name = req.body.name || item.name;
+    item.category = req.body.category || item.category;
+    item.description = req.body.description || item.description;
+    item.serialNumber = req.body.serialNumber || item.serialNumber;
+    item.barcode = req.body.barcode || item.barcode;
+    item.barcodeType = newBarcodeType || item.barcodeType;
+    item.barcodeImageUrl = barcodeImageUrl;
+    item.location = req.body.location || item.location;
+    item.quantity = newQuantity;
+    item.unit = req.body.unit || item.unit;
+    item.unitCost = req.body.unitCost || item.unitCost;
+    item.reorderLevel = req.body.reorderLevel || item.reorderLevel;
+    item.supplier = req.body.supplier || item.supplier;
+    item.manufacturer = req.body.manufacturer || item.manufacturer;
+    item.status = req.body.status || item.status;
+    item.lastMaintenanceDate = req.body.lastMaintenanceDate || item.lastMaintenanceDate;
+    item.nextMaintenanceDate = req.body.nextMaintenanceDate || item.nextMaintenanceDate;
+    item.purchaseDate = req.body.purchaseDate || item.purchaseDate;
+    item.notes = req.body.notes || item.notes;
+    item.updatedAt = Date.now();
+    
+    const updatedItem = await item.save();
+    
+    // Create transaction if quantity changed
+    if (newQuantity !== oldQuantity) {
+      await Transaction.create({
+        item: updatedItem._id,
+        type: newQuantity > oldQuantity ? 'Restock' : 'Check-out',
+        quantity: Math.abs(newQuantity - oldQuantity),
+        toLocation: newQuantity > oldQuantity ? updatedItem.location.room : null,
+        fromLocation: newQuantity < oldQuantity ? updatedItem.location.room : null,
+        performedBy: req.user._id,
+        notes: `Quantity updated from ${oldQuantity} to ${newQuantity}`
+      });
+      
+      // Check if below reorder level
+      if (newQuantity <= updatedItem.reorderLevel) {
+        // Send low stock alert email
+        const mailOptions = {
+          from: process.env.EMAIL_USER,
+          to: process.env.ADMIN_EMAIL || 'admin@cimenairobi.com',
+          subject: `Low Stock Alert: ${updatedItem.name}`,
+          html: `
+            <h2>Low Stock Alert</h2>
+            <p>The following item has reached its reorder level:</p>
+            <ul>
+              <li><strong>Item:</strong> ${updatedItem.name}</li>
+              <li><strong>Current Quantity:</strong> ${updatedItem.quantity} ${updatedItem.unit}</li>
+              <li><strong>Reorder Level:</strong> ${updatedItem.reorderLevel} ${updatedItem.unit}</li>
+            </ul>
+            <p>Please restock this item soon.</p>
+          `
+        };
         
-        // Check if below reorder level
-        if (newQuantity <= updatedItem.reorderLevel) {
-          // Send low stock alert email
-          const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: process.env.ADMIN_EMAIL || 'admin@cimenairobi.com',
-            subject: `Low Stock Alert: ${updatedItem.name}`,
-            html: `
-              <h2>Low Stock Alert</h2>
-              <p>The following item has reached its reorder level:</p>
-              <ul>
-                <li><strong>Item:</strong> ${updatedItem.name}</li>
-                <li><strong>Current Quantity:</strong> ${updatedItem.quantity} ${updatedItem.unit}</li>
-                <li><strong>Reorder Level:</strong> ${updatedItem.reorderLevel} ${updatedItem.unit}</li>
-              </ul>
-              <p>Please restock this item soon.</p>
-            `
-          };
-          
-          try {
-            await transporter.sendMail(mailOptions);
-            console.log(`Low stock alert sent for ${updatedItem.name}`);
-          } catch (err) {
-            console.error('Email sending failed:', err);
-          }
+        try {
+          await transporter.sendMail(mailOptions);
+          console.log(`Low stock alert sent for ${updatedItem.name}`);
+        } catch (err) {
+          console.error('Email sending failed:', err);
         }
       }
-      
-      res.json(updatedItem);
-    } else {
-      res.status(404).json({ message: 'Item not found' });
     }
+    
+    res.json(updatedItem);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server Error' });
@@ -271,7 +326,7 @@ const deleteItem = async (req, res) => {
   }
 };
 
-// @desc    Get items by barcode
+// @desc    Get item by barcode
 // @route   GET /api/items/barcode/:code
 // @access  Private
 const getItemByBarcode = async (req, res) => {
@@ -285,7 +340,7 @@ const getItemByBarcode = async (req, res) => {
     if (item) {
       res.json(item);
     } else {
-      res.status(404).json({ message: 'Item not found' });
+      res.status(404).json({ message: 'Item not found with this barcode' });
     }
   } catch (error) {
     console.error(error);

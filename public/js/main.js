@@ -10,93 +10,39 @@ const togglePasswordBtn = document.getElementById('togglePassword');
 
 // Check if user is already logged in
 document.addEventListener('DOMContentLoaded', () => {
-  // Check if we're on the login page
-  if (loginForm) {
-    // If user is already logged in, redirect to dashboard
-    const token = localStorage.getItem('token');
-    if (token) {
-      window.location.href = 'pages/dashboard.html';
-    }
+    // Check if we're on the login page
+    const loginForm = document.getElementById('loginForm');
+    const togglePasswordBtn = document.getElementById('togglePassword');
     
-    // Toggle password visibility
-    togglePasswordBtn.addEventListener('click', () => {
-      const passwordInput = document.getElementById('password');
-      const eyeIcon = togglePasswordBtn.querySelector('i');
-      
-      if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        eyeIcon.classList.remove('fa-eye');
-        eyeIcon.classList.add('fa-eye-slash');
-      } else {
-        passwordInput.type = 'password';
-        eyeIcon.classList.remove('fa-eye-slash');
-        eyeIcon.classList.add('fa-eye');
+    if (loginForm) {
+      // If user is already logged in, redirect to dashboard
+      const token = localStorage.getItem('token');
+      if (token) {
+        window.location.href = 'pages/dashboard.html';
       }
-    });
-    
-    // Handle login form submission
-    loginForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
       
-      const email = document.getElementById('email').value;
-      const password = document.getElementById('password').value;
-      
-      try {
-        // Show loading state
-        const submitBtn = loginForm.querySelector('button[type="submit"]');
-        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Logging in...';
-        submitBtn.disabled = true;
-        
-        // Send login request
-        const response = await fetch(`${API_URL}/users/login`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ email, password })
+      // Toggle password visibility if the button exists
+      if (togglePasswordBtn) {
+        togglePasswordBtn.addEventListener('click', () => {
+          const passwordInput = document.getElementById('password');
+          const eyeIcon = togglePasswordBtn.querySelector('i');
+          
+          if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            eyeIcon.classList.remove('fa-eye');
+            eyeIcon.classList.add('fa-eye-slash');
+          } else {
+            passwordInput.type = 'password';
+            eyeIcon.classList.remove('fa-eye-slash');
+            eyeIcon.classList.add('fa-eye');
+          }
         });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-          // Save token and user data to localStorage
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('user', JSON.stringify({
-            id: data._id,
-            name: data.name,
-            email: data.email,
-            role: data.role
-          }));
-          
-          // Redirect to dashboard
-          window.location.href = 'pages/dashboard.html';
-        } else {
-          // Show error message
-          loginAlert.textContent = data.message || 'Invalid email or password';
-          loginAlert.classList.remove('d-none');
-          loginAlert.classList.add('fade-in');
-          
-          // Reset form button
-          submitBtn.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i> Login';
-          submitBtn.disabled = false;
-        }
-      } catch (error) {
-        console.error('Login error:', error);
-        
-        // Show error message
-        loginAlert.textContent = 'Failed to connect to server. Please try again.';
-        loginAlert.classList.remove('d-none');
-        loginAlert.classList.add('fade-in');
-        
-        // Reset form button
-        const submitBtn = loginForm.querySelector('button[type="submit"]');
-        submitBtn.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i> Login';
-        submitBtn.disabled = false;
       }
-    });
-  }
-});
-
+      
+      // Update for the new login process
+      // This is now handled by auth.js, so we don't need the old code
+    }
+  });
 // Utility functions
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A';
@@ -181,38 +127,42 @@ const logout = () => {
 
 // API helper functions
 const fetchWithAuth = async (url, options = {}) => {
-  const token = getAuthToken();
-  
-  if (!token) {
-    // Redirect to login if no token
-    window.location.href = '../index.html';
-    return null;
-  }
-  
-  // Add authorization header
-  const headers = {
-    ...options.headers || {},
-    'Authorization': `Bearer ${token}`
-  };
-  
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers
-    });
+    const token = getAuthToken();
     
-    // If unauthorized, redirect to login
-    if (response.status === 401) {
-      logout();
+    if (!token) {
+      // Redirect to login if no token
+      window.location.href = '../index.html';
       return null;
     }
     
-    return response;
-  } catch (error) {
-    console.error('API request failed:', error);
-    throw error;
-  }
-};
+    // Add authorization header
+    const headers = {
+      ...options.headers || {},
+      'Authorization': `Bearer ${token}`
+    };
+    
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers
+      });
+      
+      // If unauthorized, redirect to login
+      if (response.status === 401) {
+        logout();
+        return null;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('API request failed:', error);
+      // Return a custom error response instead of throwing
+      return {
+        ok: false,
+        json: async () => ({ message: 'Network error: Failed to connect to server' })
+      };
+    }
+  };
 
 // Pagination helper
 const createPagination = (currentPage, totalPages, onPageChange) => {
@@ -282,3 +232,36 @@ const createPagination = (currentPage, totalPages, onPageChange) => {
   paginationEl.appendChild(ul);
   return paginationEl;
 };
+
+// Function to fix modal backdrop issues
+function setupModalBackdropFix() {
+    // Fix for modal backdrop not disappearing
+    document.addEventListener('hidden.bs.modal', function (event) {
+      // When any modal is hidden, remove all .modal-backdrop elements
+      const backdrops = document.querySelectorAll('.modal-backdrop');
+      backdrops.forEach(backdrop => {
+        backdrop.remove();
+      });
+      
+      // Also ensure body doesn't have the modal-open class
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+    }, false);
+    
+    // Additional fix for cases where modals are forcibly closed
+    window.clearModalBackdrops = function() {
+      const backdrops = document.querySelectorAll('.modal-backdrop');
+      backdrops.forEach(backdrop => {
+        backdrop.remove();
+      });
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+    };
+  }
+  
+  // Call this function when the document is loaded
+  document.addEventListener('DOMContentLoaded', function() {
+    setupModalBackdropFix();
+  });

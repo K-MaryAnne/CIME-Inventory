@@ -4,6 +4,7 @@
 let html5QrCode;
 let currentItemId = null;
 let locationHierarchy = [];
+let isScanning = false;
 
 document.addEventListener('DOMContentLoaded', () => {
   // Check if user is logged in
@@ -39,70 +40,128 @@ document.addEventListener('DOMContentLoaded', () => {
 // Initialize the scanner
 function initializeScanner() {
   html5QrCode = new Html5Qrcode("reader");
+  
+  // Create nicer-looking reader container
+  const readerContainer = document.getElementById('reader');
+  readerContainer.innerHTML = `
+    <div class="text-center p-5">
+      <i class="fas fa-camera fa-3x mb-3 text-muted"></i>
+      <p>Click "Start Camera" to begin scanning</p>
+    </div>
+  `;
 }
 
 // Start scanning
 function startScanning() {
-  const startButton = document.getElementById('startButton');
-  const stopButton = document.getElementById('stopButton');
-  
-  startButton.disabled = true;
-  stopButton.disabled = false;
-  
-  // Camera options
-  const config = {
-    fps: 10,
-    qrbox: { width: 250, height: 250 },
-    aspectRatio: 1.0
-  };
-  
-  // Success callback
-  const qrCodeSuccessCallback = (decodedText) => {
-    // Stop scanning after successful scan
-    stopScanning();
+    if (isScanning) return;
     
-    // Search for the item
-    searchItem(decodedText);
-  };
-  
-  // Start scanning with rear camera
-  html5QrCode.start(
-    { facingMode: "environment" },
-    config,
-    qrCodeSuccessCallback,
-    (errorMessage) => {
-      // Handle errors
-      console.error(`QR Code scanning error: ${errorMessage}`);
-    }
-  ).catch((err) => {
-    console.error(`Unable to start scanning: ${err}`);
-    showAlert('Failed to start camera. Please check camera permissions.', 'danger');
+    const startButton = document.getElementById('startButton');
+    const stopButton = document.getElementById('stopButton');
     
-    // Reset buttons
-    startButton.disabled = false;
-    stopButton.disabled = true;
-  });
-}
+    startButton.disabled = true;
+    stopButton.disabled = false;
+    
+    // Update UI to show we're starting
+    const readerContainer = document.getElementById('reader');
+    readerContainer.innerHTML = `
+      <div class="text-center p-5">
+        <div class="spinner-border text-primary mb-3" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p>Starting camera...</p>
+      </div>
+    `;
+    
+    // Simpler config without explicit formats
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0
+    };
+    
+    // Success callback
+    const qrCodeSuccessCallback = (decodedText) => {
+      console.log("Scanned barcode:", decodedText);
+      
+      // Play a beep sound if possible
+      try {
+        const beep = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU...'); // Base64 encoded beep sound
+        beep.play();
+      } catch (e) {
+        console.log('Beep sound not supported');
+      }
+      
+      // Stop scanning after successful scan
+      stopScanning();
+      
+      // Search for the item
+      searchItem(decodedText);
+    };
+    
+    // Start scanning with rear camera
+    html5QrCode.start(
+      { facingMode: "environment" },
+      config,
+      qrCodeSuccessCallback,
+      (errorMessage) => {
+        // Show verbose errors only in console, don't disrupt the UI
+        console.log(errorMessage);
+      }
+    ).then(() => {
+      isScanning = true;
+      showAlert('Camera started. Point at a barcode to scan.', 'info');
+    }).catch((err) => {
+      console.error(`Unable to start scanning: ${err}`);
+      showAlert('Failed to start camera. Please check camera permissions.', 'danger');
+      
+      // Show error in reader container
+      readerContainer.innerHTML = `
+        <div class="text-center p-5">
+          <i class="fas fa-exclamation-triangle fa-3x mb-3 text-danger"></i>
+          <p>Camera error: ${err.toString()}</p>
+          <p class="small text-muted">Please ensure camera permissions are granted in your browser.</p>
+        </div>
+      `;
+      
+      // Reset buttons
+      startButton.disabled = false;
+      stopButton.disabled = true;
+    });
+  }
 
 // Stop scanning
 function stopScanning() {
+  if (!isScanning) return;
+  
   const startButton = document.getElementById('startButton');
   const stopButton = document.getElementById('stopButton');
   
   if (html5QrCode && html5QrCode.isScanning) {
     html5QrCode.stop().then(() => {
       console.log('Scanning stopped');
+      isScanning = false;
+      
+      // Reset UI
+      const readerContainer = document.getElementById('reader');
+      readerContainer.innerHTML = `
+        <div class="text-center p-5">
+          <i class="fas fa-camera fa-3x mb-3 text-muted"></i>
+          <p>Click "Start Camera" to begin scanning</p>
+        </div>
+      `;
       
       // Reset buttons
       startButton.disabled = false;
       stopButton.disabled = true;
     }).catch((err) => {
       console.error(`Error stopping scanner: ${err}`);
+      isScanning = false;
     });
   } else {
     // Reset buttons anyway
     startButton.disabled = false;
     stopButton.disabled = true;
+    isScanning = false;
   }
 }
 
@@ -122,10 +181,21 @@ async function searchItem(barcode) {
       </div>
     `;
     
-    // Fetch item by barcode
-    const response = await fetchWithAuth(`${API_URL}/items/barcode/${barcode}`);
+    // Also update the barcode input field
+    document.getElementById('barcodeInput').value = barcode;
     
-    if (!response) return;
+    // Fetch item by barcode
+    const response = await fetchWithAuth(`${API_URL}/items/barcode/${encodeURIComponent(barcode)}`);
+    
+    if (!response) {
+      document.getElementById('itemDetails').innerHTML = `
+        <div class="text-center py-5">
+          <i class="fas fa-exclamation-circle fa-3x mb-3 text-danger"></i>
+          <p class="mb-0">Server connection error</p>
+        </div>
+      `;
+      return;
+    }
     
     if (response.ok) {
       const item = await response.json();
@@ -135,12 +205,16 @@ async function searchItem(barcode) {
       
       // Load transactions for this item
       loadItemTransactions(item._id);
+      
+      // Show success message
+      showAlert(`Item found: ${item.name}`, 'success');
     } else {
       // Handle item not found
       document.getElementById('itemDetails').innerHTML = `
         <div class="text-center py-5">
           <i class="fas fa-exclamation-circle fa-3x mb-3 text-warning"></i>
           <p class="mb-0">Item not found with barcode: ${barcode}</p>
+          <p class="small text-muted mt-2">Verify that the barcode exists in the system</p>
         </div>
       `;
       
@@ -157,8 +231,12 @@ async function searchItem(barcode) {
       if (response.status === 404) {
         showAlert(`Item with barcode "${barcode}" not found.`, 'warning');
       } else {
-        const errorData = await response.json();
-        showAlert(errorData.message || 'Failed to search for item', 'danger');
+        try {
+          const errorData = await response.json();
+          showAlert(errorData.message || 'Failed to search for item', 'danger');
+        } catch (e) {
+          showAlert('Failed to search for item', 'danger');
+        }
       }
     }
   } catch (error) {
@@ -213,12 +291,16 @@ function displayItemDetails(item) {
   const detailsHtml = `
     <div class="row">
       <div class="col-md-4 text-center mb-3 mb-md-0">
-        ${item.imageUrl ? `
+        ${item.barcodeImageUrl ? `
           <div class="mb-2">
-            <img src="${item.imageUrl}" alt="Barcode" class="img-fluid" style="max-width: 150px;">
+            <img src="${item.barcodeImageUrl}" alt="Barcode" class="img-fluid" style="max-width: 150px;">
+          </div>
+        ` : item.barcode ? `
+          <div class="mb-2" id="barcodeDisplay">
+            <!-- Barcode will be rendered here -->
           </div>
         ` : ''}
-        <div class="font-monospace small">${item.barcode}</div>
+        <div class="font-monospace small">${item.barcode || 'No barcode'}</div>
       </div>
       <div class="col-md-8">
         <h5 class="mb-3">${item.name}</h5>
@@ -248,6 +330,29 @@ function displayItemDetails(item) {
   
   // Update item details
   document.getElementById('itemDetails').innerHTML = detailsHtml;
+  
+  // If JsBarcode is available and we have a barcode but no image, generate one
+  if (typeof JsBarcode !== 'undefined' && item.barcode && !item.barcodeImageUrl) {
+    const barcodeDisplay = document.getElementById('barcodeDisplay');
+    if (barcodeDisplay) {
+      try {
+        // Create canvas for the barcode
+        const canvas = document.createElement('canvas');
+        barcodeDisplay.appendChild(canvas);
+        
+        // Generate the barcode
+        JsBarcode(canvas, item.barcode, {
+          format: "CODE128",
+          lineColor: "#000",
+          width: 2,
+          height: 50,
+          displayValue: false
+        });
+      } catch (e) {
+        console.error('Error generating barcode display:', e);
+      }
+    }
+  }
   
   // Show action buttons
   document.getElementById('itemActions').classList.remove('d-none');
@@ -517,8 +622,12 @@ async function saveTransaction() {
       // Reload item details and transactions
       searchItem(document.getElementById('barcodeInput').value);
     } else {
-      const errorData = await response.json();
-      showAlert(errorData.message || 'Failed to create transaction', 'danger');
+      try {
+        const errorData = await response.json();
+        showAlert(errorData.message || 'Failed to create transaction', 'danger');
+      } catch (e) {
+        showAlert('Failed to create transaction', 'danger');
+      }
     }
   } catch (error) {
     console.error('Save transaction error:', error);

@@ -12,6 +12,9 @@
   <!-- Custom CSS -->
   <link rel="stylesheet" href="../css/main.css">
   <link rel="stylesheet" href="../css/dashboard.css">
+  <!-- Barcode Libraries -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.4/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 </head>
 <body>
   <!-- Navigation -->
@@ -156,6 +159,29 @@
             </div>
           </div>
         </div>
+
+
+
+        <!-- -->
+<div class="card mb-4">
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-12">
+          <h5><i class="fas fa-barcode me-2"></i>Quick Barcode Lookup</h5>
+          <div class="input-group mt-2">
+            <input type="text" class="form-control" id="quickBarcodeSearch" placeholder="Scan or enter barcode to find item...">
+            <button class="btn btn-primary" type="button" id="quickScanBtn">
+              <i class="fas fa-camera me-1"></i> Scan
+            </button>
+            <button class="btn btn-success" type="button" id="quickSearchBtn">
+              <i class="fas fa-search me-1"></i> Find
+            </button>
+          </div>
+          <small class="form-text text-muted">Scan any item barcode to instantly view its details</small>
+        </div>
+      </div>
+    </div>
+  </div>
         
         <!-- Inventory Table -->
         <div class="card mb-4">
@@ -330,26 +356,104 @@
               </div>
             </div>
             
-            <div class="row" id="barcodeRow">
-              <div class="col-md-12 text-center">
-                <div class="mb-3">
-                  <div class="d-inline-block p-3 border rounded">
-                    <h6 class="mb-2">Item Barcode/QR Code</h6>
-                    <div id="barcodeImage" class="mb-2">
-                      <!-- QR code will be displayed here -->
-                      <div class="text-muted">QR code will be generated when item is saved</div>
+            <div class="row mb-4" id="barcodeRow">
+                <div class="col-md-12">
+                  <div class="card">
+                    <div class="card-header bg-light">
+                      <h5 class="mb-0"><i class="fas fa-barcode me-2"></i>Barcode Information</h5>
                     </div>
-                    <div id="barcodeValue" class="font-monospace"></div>
-                  </div>
-                </div>
-                <div class="mb-3">
-                  <button type="button" class="btn btn-outline-primary btn-sm" id="printBarcodeBtn">
-                    <i class="fas fa-print me-1"></i> Print Barcode
+                    <div class="card-body">
+                      <div class="mb-3">
+                        <label class="form-label">Barcode Type</label>
+                        <div class="d-flex">
+                          <div class="form-check me-4">
+                            <input class="form-check-input" type="radio" name="barcodeOption" id="scanExisting" value="existing" checked>
+                            <label class="form-check-label" for="scanExisting">
+                              Use existing manufacturer barcode
+                            </label>
+                          </div>
+                          <div class="form-check">
+                            <input class="form-check-input" type="radio" name="barcodeOption" id="generateNew" value="generate">
+                            <label class="form-check-label" for="generateNew">
+                              Generate new system barcode
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+
+
+                      <!-- Existing barcode section -->
+        <div id="scanBarcodeSection">
+            <div class="row mb-3">
+              <div class="col-md-8">
+                <label for="itemBarcode" class="form-label">Barcode Value</label>
+                <div class="input-group">
+                  <input type="text" class="form-control" id="itemBarcode" placeholder="Scan or type existing barcode">
+                  <button class="btn btn-outline-primary" type="button" id="scanBarcodeBtn">
+                    <i class="fas fa-camera me-1"></i> Scan
                   </button>
+                </div>
+                <small class="form-text text-muted">Enter the barcode exactly as printed on the item</small>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Scanner</label>
+                <div id="scannerPreview" class="border rounded p-2 d-none text-center" style="min-height: 150px;">
+                  <!-- Camera preview will appear here -->
                 </div>
               </div>
             </div>
-          </form>
+          </div>
+          
+          <!-- Generated barcode section -->
+          <div id="generatedBarcodeSection" class="d-none">
+            <div class="row">
+              <div class="col-md-12">
+                <div class="alert alert-info">
+                  <i class="fas fa-info-circle me-2"></i> A unique system barcode will be generated automatically when the item is saved.
+                </div>
+              </div>
+            </div>
+            
+            <div id="previewGeneratedBarcode" class="text-center d-none">
+              <div class="d-inline-block border rounded p-3 bg-light">
+                <p class="mb-2"><small>Preview of generated barcode:</small></p>
+                <div id="generatedBarcodeImage" class="mb-2"></div>
+                <div id="generatedBarcodeValue" class="font-monospace"></div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Current barcode display for edit mode -->
+          <div id="currentBarcodeDisplay" class="d-none mt-3 pt-3 border-top">
+            <div class="row">
+              <div class="col-md-12">
+                <h6 class="mb-3">Current Barcode</h6>
+                <div class="d-flex justify-content-center">
+                  <div class="text-center p-3 border rounded">
+                    <div id="currentBarcodeImage" class="mb-2">
+                      <!-- Barcode image will be displayed here -->
+                    </div>
+                    <div id="currentBarcodeValue" class="font-monospace"></div>
+                    <small id="currentBarcodeType" class="text-muted d-block mt-1"></small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button type="button" class="btn btn-outline-primary btn-sm" id="printBarcodeBtn">
+            <i class="fas fa-print me-1"></i> Print Barcode
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="printItemDetailsBtn">
+            <i class="fas fa-print me-1"></i> Print Item Details
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</form>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -459,6 +563,13 @@
     </div>
   </div>
 
+
+
+  
+ 
+
+
+
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
   <!-- Custom JS -->
@@ -466,3 +577,4 @@
   <script src="../js/inventory.js"></script>
 </body>
 </html>
+

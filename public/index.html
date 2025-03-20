@@ -1,4 +1,3 @@
-<!-- public/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,6 +10,46 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css">
   <!-- Custom CSS -->
   <link rel="stylesheet" href="css/main.css">
+  <style>
+    .form-switch-container {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 1.5rem;
+    }
+    .auth-divider {
+      text-align: center;
+      position: relative;
+      margin: 20px 0;
+    }
+    .auth-divider::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      width: 100%;
+      height: 1px;
+      background: #e0e0e0;
+    }
+    .auth-divider span {
+      background: #fff;
+      padding: 0 10px;
+      position: relative;
+      color: #6c757d;
+    }
+    .form-container {
+      transition: all 0.3s ease;
+    }
+    .password-feedback {
+      height: 20px;
+      font-size: 0.8rem;
+    }
+    .auth-footer {
+      text-align: center;
+      margin-top: 30px;
+      font-size: 0.9rem;
+      color: #6c757d;
+    }
+  </style>
 </head>
 <body class="bg-light">
   <div class="container">
@@ -23,45 +62,129 @@
               <p class="text-muted">Inventory Management System</p>
             </div>
             
-            <div id="loginAlert" class="alert alert-danger d-none">
-              Invalid email or password
+            <!-- Form switch -->
+            <div class="form-switch-container">
+              <div class="btn-group" role="group">
+                <input type="radio" class="btn-check" name="authType" id="loginRadio" autocomplete="off" checked>
+                <label class="btn btn-outline-primary" for="loginRadio">Login</label>
+                
+                <input type="radio" class="btn-check" name="authType" id="registerRadio" autocomplete="off">
+                <label class="btn btn-outline-primary" for="registerRadio">Register</label>
+              </div>
             </div>
             
-            <form id="loginForm">
+            <!-- Alert container -->
+            <div id="alertContainer"></div>
+            
+            <!-- Login Form -->
+            <div id="loginForm" class="form-container">
               <div class="mb-3">
-                <label for="email" class="form-label">Email Address</label>
+                <label for="loginEmail" class="form-label">Email Address</label>
                 <div class="input-group">
                   <span class="input-group-text">
                     <i class="fas fa-envelope"></i>
                   </span>
-                  <input type="email" id="email" class="form-control" placeholder="Enter your email" required>
+                  <input type="email" id="loginEmail" class="form-control" placeholder="Enter your email" required>
                 </div>
               </div>
               
               <div class="mb-4">
-                <label for="password" class="form-label">Password</label>
+                <label for="loginPassword" class="form-label">Password</label>
                 <div class="input-group">
                   <span class="input-group-text">
                     <i class="fas fa-lock"></i>
                   </span>
-                  <input type="password" id="password" class="form-control" placeholder="Enter your password" required>
-                  <button type="button" class="btn btn-outline-secondary" id="togglePassword">
+                  <input type="password" id="loginPassword" class="form-control" placeholder="Enter your password" required>
+                  <button type="button" class="btn btn-outline-secondary" id="toggleLoginPassword">
                     <i class="fas fa-eye"></i>
                   </button>
                 </div>
               </div>
               
               <div class="d-grid">
-                <button type="submit" class="btn btn-primary btn-lg">
+                <button type="button" id="loginBtn" class="btn btn-primary btn-lg">
                   <i class="fas fa-sign-in-alt me-2"></i> Login
                 </button>
               </div>
-            </form>
+            </div>
+            
+            <!-- Registration Form -->
+            <div id="registerForm" class="form-container d-none">
+              <div class="mb-3">
+                <label for="registerName" class="form-label">Full Name</label>
+                <div class="input-group">
+                  <span class="input-group-text">
+                    <i class="fas fa-user"></i>
+                  </span>
+                  <input type="text" id="registerName" class="form-control" placeholder="Enter your full name" required>
+                </div>
+              </div>
+              
+              <div class="mb-3">
+                <label for="registerEmail" class="form-label">Email Address</label>
+                <div class="input-group">
+                  <span class="input-group-text">
+                    <i class="fas fa-envelope"></i>
+                  </span>
+                  <input type="email" id="registerEmail" class="form-control" placeholder="Enter your email" required>
+                </div>
+              </div>
+              
+              <div class="mb-3">
+                <label for="registerPassword" class="form-label">Password</label>
+                <div class="input-group">
+                  <span class="input-group-text">
+                    <i class="fas fa-lock"></i>
+                  </span>
+                  <input type="password" id="registerPassword" class="form-control" placeholder="Create a password" required>
+                  <button type="button" class="btn btn-outline-secondary" id="toggleRegisterPassword">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+                <div class="progress mt-1" style="height: 5px;">
+                  <div class="progress-bar" id="passwordStrength" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div class="password-feedback text-muted" id="passwordFeedback">
+                  Password must be at least 8 characters long.
+                </div>
+              </div>
+              
+              <div class="mb-4">
+                <label for="confirmPassword" class="form-label">Confirm Password</label>
+                <div class="input-group">
+                  <span class="input-group-text">
+                    <i class="fas fa-lock"></i>
+                  </span>
+                  <input type="password" id="confirmPassword" class="form-control" placeholder="Confirm your password" required>
+                </div>
+                <div class="invalid-feedback" id="confirmPasswordFeedback">
+                  Passwords do not match.
+                </div>
+              </div>
+              
+              <div class="mb-4 form-check">
+                <input type="checkbox" class="form-check-input" id="termsCheck" required>
+                <label class="form-check-label" for="termsCheck">
+                  I agree to the terms and conditions
+                </label>
+              </div>
+              
+              <div class="d-grid">
+                <button type="button" id="registerBtn" class="btn btn-primary btn-lg">
+                  <i class="fas fa-user-plus me-2"></i> Register
+                </button>
+              </div>
+              
+              <div class="mt-3 alert alert-info small">
+                <i class="fas fa-info-circle me-2"></i>
+                New users are registered with basic access. An administrator will review your account and grant appropriate permissions.
+              </div>
+            </div>
           </div>
         </div>
         
-        <div class="text-center mt-4 text-muted">
-          <small>&copy; 2025 CIME Nairobi. All rights reserved.</small>
+        <div class="auth-footer">
+          &copy; 2025 CIME Nairobi. All rights reserved.
         </div>
       </div>
     </div>
@@ -69,7 +192,11 @@
 
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- API URL Declaration -->
+  <script>
+    const API_URL = 'http://localhost:5000/api';
+  </script>
   <!-- Custom JS -->
-  <script src="js/main.js"></script>
+  <script src="js/auth.js"></script>
 </body>
 </html>

@@ -27,6 +27,22 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('profileEmail').value = user.email;
     document.getElementById('profileRole').value = user.role;
   });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // Existing code...
+    
+    // Refresh tooltips when dashboard is refreshed
+    document.getElementById('refreshDashboard').addEventListener('click', () => {
+      // Remove any existing tooltips
+      const oldTooltip = bootstrap.Tooltip.getInstance(document.querySelector('.top-items-info-trigger'));
+      if (oldTooltip) {
+        oldTooltip.dispose();
+      }
+      
+      // Then refresh dashboard
+      initializeDashboard();
+    });
+  });
   
   // Initialize dashboard data
   async function initializeDashboard() {
@@ -55,17 +71,75 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('totalItems').textContent = data.totalItems || 0;
     document.getElementById('lowStockItems').textContent = data.lowStockItems || 0;
     document.getElementById('maintenanceItems').textContent = data.itemsUnderMaintenance || 0;
-    document.getElementById('inventoryValue').textContent = formatCurrency(data.inventoryValue || 0);
+    // document.getElementById('inventoryValue').textContent = formatCurrency(data.inventoryValue || 0);
+    
+    const mostUsedItem = data.mostUsedItems && data.mostUsedItems.length > 0 ? 
+        `${data.mostUsedItems[0].name} (${data.mostUsedItems[0].totalQuantity} uses)` : 
+        'No data';
+    document.getElementById('mostUsedItem').textContent = mostUsedItem;
+    
+    // Tooltip for top 3 items
+    if (data.mostUsedItems && data.mostUsedItems.length > 0) {
+        const topItem = data.mostUsedItems[0];
+        document.getElementById('mostUsedItem').textContent = `${topItem.name} (${topItem.totalQuantity})`;
+        
+        // Create tooltip content for top 3 items
+        let tooltipContent = '<div class="top-items-tooltip">';
+        for (let i = 0; i < Math.min(3, data.mostUsedItems.length); i++) {
+          const item = data.mostUsedItems[i];
+          const itemClass = i === 0 ? 'top-item-gold' : i === 1 ? 'top-item-silver' : 'top-item-bronze';
+          
+          tooltipContent += `
+            <div class="top-item ${itemClass}">
+              <span class="top-item-rank">#${i+1}</span>
+              <span class="top-item-name">${item.name}</span>
+              <span class="top-item-count">${item.totalQuantity} uses</span>
+            </div>
+          `;
+        }
+        tooltipContent += '</div>';
+        
+        // Update the tooltip
+        const tooltipTrigger = document.querySelector('.top-items-info-trigger');
+        tooltipTrigger.setAttribute('data-bs-original-title', tooltipContent);
+        
+        // Initialize Bootstrap tooltip
+        const tooltip = new bootstrap.Tooltip(tooltipTrigger, {
+          html: true,
+          placement: 'bottom',
+          template: '<div class="tooltip top-items-tooltip-container" role="tooltip"><div class="tooltip-arrow"></div><div class="tooltip-inner"></div></div>'
+        });
+      } else {
+        document.getElementById('mostUsedItem').textContent = 'No data available';
+        document.querySelector('.top-items-info-trigger').classList.add('d-none');
+      }
+     
     
     // Create charts
     createCategoryChart(data.itemsByCategory || []);
     createStatusChart(data.itemsByStatus || []);
     
-    // Update tables
-    updateRecentTransactionsTable(data.recentTransactions || []);
-    
-    // Fetch low stock items
+      // Update tables
+  updateRecentTransactionsTable(data.recentTransactions || []);
+  
+  // Fetch low stock items only if user has permission (Admin or Inventory Manager)
+  const user = getCurrentUser();
+  if (user && (user.role === 'Admin' || user.role === 'Inventory Manager')) {
     fetchLowStockItems();
+  } else {
+    // For Staff and Technician roles, show a permissions message instead
+    const lowStockTable = document.getElementById('lowStockTable');
+    if (lowStockTable) {
+      lowStockTable.innerHTML = `
+        <tr>
+          <td colspan="6" class="text-center py-3">
+            <i class="fas fa-lock text-secondary me-2"></i>
+            You need Admin or Inventory Manager permissions to view low stock items
+          </td>
+        </tr>
+      `;
+    }
+  }
   }
   
   // Create category chart
@@ -224,6 +298,21 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         const errorData = await response.json();
         console.error('Low stock error:', errorData);
+        
+        // Handle unauthorized error
+        if (response.status === 403) {
+          const lowStockTable = document.getElementById('lowStockTable');
+          if (lowStockTable) {
+            lowStockTable.innerHTML = `
+              <tr>
+                <td colspan="6" class="text-center py-3">
+                  <i class="fas fa-lock text-secondary me-2"></i>
+                  You need Admin or Inventory Manager permissions to view low stock items
+                </td>
+              </tr>
+            `;
+          }
+        }
       }
     } catch (error) {
       console.error('Low stock error:', error);

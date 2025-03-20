@@ -30,6 +30,39 @@
   .bg-primary {
     background-color: var(--primary-color) !important;
   }
+
+  .bg-purple-light {
+    background-color: rgba(123, 104, 238, 0.15)
+  }
+
+  .text-purple {
+    color: #7b68ee !important;
+  }
+
+  .bg-blue-light {
+    background-color: #cce5ff;
+  }
+
+  .text-blue {
+    color: #007bff !important;
+  }
+
+  
+  .bg-yellow-light {
+    background-color: #f9ecc0;
+  }
+
+  .text-yellow {
+    color: #ffc107 !important;
+  }
+
+  .bg-green-light {
+    background-color:  #d4edda;
+  }
+
+  .text-green {
+    color: #006830 !important;
+  }
   
   .border-primary {
     border-color: var(--primary-color) !important;
@@ -217,6 +250,82 @@
   .dashboard-table th, .dashboard-table td {
     padding: 0.5rem 0.75rem;
     vertical-align: middle;
+  }
+
+  /* Tooltip styles */
+  .top-items-info-trigger {
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  
+  .top-items-info-trigger:hover {
+    color: var(--primary-color) !important;
+  }
+  
+  .top-items-tooltip-container .tooltip-inner {
+    max-width: 280px;
+    padding: 0.5rem;
+    background-color: #fff;
+    color: #333;
+    border: 1px solid rgba(0,0,0,0.1);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+    text-align: left;
+  }
+  
+  .top-items-tooltip {
+    padding: 0.25rem;
+  }
+  
+  .top-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    margin-bottom: 0.25rem;
+    border-radius: 4px;
+    background-color: rgba(0,0,0,0.03);
+  }
+  
+  .top-item:last-child {
+    margin-bottom: 0;
+  }
+  
+  .top-item-rank {
+    font-weight: bold;
+    margin-right: 0.75rem;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: white;
+  }
+  
+  .top-item-gold .top-item-rank {
+    background-color: #FFD700;
+  }
+  
+  .top-item-silver .top-item-rank {
+    background-color: #C0C0C0;
+  }
+  
+  .top-item-bronze .top-item-rank {
+    background-color: #CD7F32;
+  }
+  
+  .top-item-name {
+    flex-grow: 1;
+    font-weight: 500;
+  }
+  
+  .top-item-count {
+    font-weight: bold;
+    color: var(--primary-color);
+  }
+  
+  /* Change the tooltip arrow color */
+  .top-items-tooltip-container .tooltip-arrow::before {
+    border-bottom-color: #fff;
   }
   
   

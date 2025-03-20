@@ -33,6 +33,11 @@ router.get(
 // Get item by barcode
 router.get('/barcode/:code', protect, getItemByBarcode);
 
+// Health check endpoint
+router.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
+  });
+
 // Get, update and delete item by ID
 router.route('/:id')
   .get(protect, getItemById)

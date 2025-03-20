@@ -82,13 +82,54 @@ const getDashboardSummary = async (req, res) => {
     // Get suppliers count
     const suppliersCount = await Supplier.countDocuments();
     
+    // Get most used items
+    const mostUsedItems = await Transaction.aggregate([
+        // Filter for check-out transactions only
+        { $match: { type: 'Check-out' } },
+        // Group by item and count occurrences
+        {
+          $group: {
+            _id: '$item',
+            count: { $sum: 1 },
+            totalQuantity: { $sum: '$quantity' }
+          }
+        },
+        // Lookup to get item details
+        {
+          $lookup: {
+            from: 'items',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'itemDetails'
+          }
+        },
+        // Unwind the itemDetails array
+        { $unwind: '$itemDetails' },
+        // Project to reshape the output
+        {
+          $project: {
+            _id: 1,
+            name: '$itemDetails.name',
+            category: '$itemDetails.category',
+            count: 1,
+            totalQuantity: 1
+          }
+        },
+        // Sort by checkout count in descending order
+        { $sort: { totalQuantity: -1 } },
+        // Limit to top 5 items
+        { $limit: 5 }
+      ]);
+
+
     res.json({
       totalItems,
       itemsByCategory,
       itemsByStatus,
       lowStockItems,
       itemsUnderMaintenance,
-      inventoryValue: inventoryValue.length > 0 ? inventoryValue[0].total : 0,
+      // inventoryValue: inventoryValue.length > 0 ? inventoryValue[0].total : 0,
+      mostUsedItems,
       recentTransactions,
       locationsCount,
       suppliersCount

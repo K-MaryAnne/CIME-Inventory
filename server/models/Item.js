@@ -23,6 +23,16 @@ const ItemSchema = new mongoose.Schema({
     type: String,
     unique: true
   },
+
+  barcodeType: {
+    type: String,
+    enum: ['existing', 'generate'],
+    default: 'generate'
+  },
+ 
+  barcodeImageUrl: {
+    type: String
+  },
   location: {
     room: {
       type: mongoose.Schema.Types.ObjectId,
@@ -75,9 +85,9 @@ const ItemSchema = new mongoose.Schema({
   purchaseDate: {
     type: Date
   },
-  imageUrl: {
-    type: String
-  },
+//   imageUrl: {
+//     type: String
+//   },
   notes: {
     type: String
   },
@@ -96,6 +106,6 @@ const ItemSchema = new mongoose.Schema({
 });
 
 // Add index for fast barcode searching
-// ItemSchema.index({ barcode: 1 });
+ItemSchema.index({ barcode: 1 });
 
 module.exports = mongoose.model('Item', ItemSchema);
