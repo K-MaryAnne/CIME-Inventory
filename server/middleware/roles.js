@@ -15,4 +15,4 @@ const authorize = (...roles) => {
     };
   };
   
-  module.exports = { protect, authorize };
+  module.exports = {authorize };

@@ -12,6 +12,8 @@ let activeScanner = null;
 let activeScannerElementId = null;
 let activeScannerTargetId = null;
 
+let generatedBarcode = null;
+
 
 // Handle view button clicks
 document.addEventListener('click', function(e) {
@@ -64,6 +66,28 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
 
   setupBarcodeEventListeners();
+
+  setupBarcodeChangeListeners();
+
+
+  // Fix modal accessibility issues
+  fixModalAccessibilityIssues();
+  
+  // Make sure Save Item button has event listener attached
+  const saveItemBtn = document.getElementById('saveItemBtn');
+  if (saveItemBtn) {
+    // Remove any existing event listeners to avoid duplicates
+    const newSaveBtn = saveItemBtn.cloneNode(true);
+    saveItemBtn.parentNode.replaceChild(newSaveBtn, saveItemBtn);
+    
+    // Add new event listener
+    newSaveBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      console.log('Save button clicked');
+      saveItem();
+    });
+  }
+
   
   // Show/hide manager/admin features based on user role
   if (isInventoryManager()) {
@@ -85,6 +109,45 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Load locations and suppliers for the form
   loadLocationsAndSuppliers();
+
+
+  // Auto-focus the barcode lookup field
+  const quickBarcodeSearch = document.getElementById('quickBarcodeSearch');
+  if (quickBarcodeSearch) {
+    setTimeout(() => {
+      quickBarcodeSearch.focus();
+    }, 500);
+  }
+  
+  // Look for the 'addItem' hash fragment to automatically open Add Item modal
+  if (window.location.hash === '#addItem') {
+    document.getElementById('addItemBtn').click();
+  }
+
+
+
+  function fixModalAccessibilityIssues() {
+    // When any modal is hidden, properly clean up ARIA attributes
+    document.body.addEventListener('hidden.bs.modal', function(event) {
+      // Reset focus to body
+      document.body.focus();
+      
+      // Remove aria-hidden from all elements
+      document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
+        el.removeAttribute('aria-hidden');
+      });
+      
+      // Clear any remaining modal-related classes and styles
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+      
+      // Remove any leftover backdrops
+      document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+        backdrop.remove();
+      });
+    }, true);
+  }
 });
 
 
@@ -234,99 +297,210 @@ async function loadLowStockItems() {
 
 
 
+
+// Modify the setupBarcodeEventListeners function
 function setupBarcodeEventListeners() {
-    // Quick barcode search (at the top of inventory page)
+    // Quick barcode search at the top of inventory page
     document.getElementById('quickBarcodeSearch').addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
+        e.preventDefault(); // Prevent form submission
         const barcode = this.value.trim();
         if (barcode) {
           findItemByBarcode(barcode);
+          
+          // Add visual feedback for scan
+          this.classList.add('highlight-scan');
+          setTimeout(() => {
+            this.classList.remove('highlight-scan');
+          }, 300);
+          
+          // Play a scan sound
+          playBeepSound();
         }
       }
     });
-// Quick scan button
-document.getElementById('quickScanBtn').addEventListener('click', function() {
-    showQuickScanModal();
-  });
-  
-  // Quick search button
-  document.getElementById('quickSearchBtn').addEventListener('click', function() {
-    const barcode = document.getElementById('quickBarcodeSearch').value.trim();
-    if (barcode) {
-      findItemByBarcode(barcode);
-    } else {
-      showAlert('Please enter or scan a barcode first', 'warning');
-    }
-  });
-  
-  // Barcode type radio buttons in the item modal
-  document.querySelectorAll('input[name="barcodeOption"]').forEach(radio => {
-    radio.addEventListener('change', function() {
-      toggleBarcodeInputMethod();
+    
+    // Quick scan button - now we'll use native input activation
+    document.getElementById('quickScanBtn').addEventListener('click', function() {
+      // Focus the input - the physical scanner will input there
+      document.getElementById('quickBarcodeSearch').focus();
+      showAlert('Ready to scan! Use your barcode scanner now.', 'info');
     });
-  });
-  
-  // Scan button in the item modal
-  document.getElementById('scanBarcodeBtn').addEventListener('click', function() {
-    startBarcodeScanner('scannerPreview', 'itemBarcode');
-  });
-  
-  // Print barcode button
-  document.getElementById('printBarcodeBtn').addEventListener('click', function() {
-    // Get the item ID
-    const itemId = document.getElementById('itemId').value;
     
-    // If we have an item ID, fetch the latest data and print
-    if (itemId) {
-      fetchWithAuth(`${API_URL}/items/${itemId}`)
-        .then(response => {
-          if (response.ok) {
-            return response.json();
-          } else {
-            throw new Error('Failed to fetch item data');
-          }
-        })
-        .then(item => {
-          printBarcode(item);
-        })
-        .catch(error => {
-          console.error('Error fetching item for printing:', error);
-          showAlert('Error preparing barcode for printing', 'danger');
-        });
-    } else {
-      // For new items that haven't been saved yet
-      showAlert('Please save the item first before printing the barcode', 'warning');
+    // Quick search button
+    document.getElementById('quickSearchBtn').addEventListener('click', function() {
+      const barcode = document.getElementById('quickBarcodeSearch').value.trim();
+      if (barcode) {
+        findItemByBarcode(barcode);
+      } else {
+        showAlert('Please enter or scan a barcode first', 'warning');
+      }
+    });
+    
+    // Barcode type radio buttons in the item modal
+    document.querySelectorAll('input[name="barcodeOption"]').forEach(radio => {
+      radio.addEventListener('change', function() {
+        toggleBarcodeInputMethod();
+      });
+    });
+    
+    // Scan button in the item modal
+    document.getElementById('scanBarcodeBtn').addEventListener('click', function() {
+   // Focus on the input field - the physical scanner will input there
+   const itemBarcode = document.getElementById('itemBarcode');
+   itemBarcode.focus();
+   itemBarcode.select();
+   showAlert('Ready to scan! Use your barcode scanner now.', 'info', 'itemModalAlerts', false);
+   
+   // Visual feedback
+   itemBarcode.classList.add('focus-highlight');
+   setTimeout(() => {
+     itemBarcode.classList.remove('focus-highlight');
+   }, 3000);
+ });
+    
+  // Add enter key event to the barcode input field in the item modal
+  document.getElementById('itemBarcode').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // Prevent form submission
+      
+      // Visual feedback
+      this.classList.add('highlight-scan');
+      setTimeout(() => {
+        this.classList.remove('highlight-scan');
+      }, 300);
+      
+      // Play a scan sound
+      try {
+        // Create a simple beep sound using Web Audio API
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.type = 'sine';
+        oscillator.frequency.value = 1000; // frequency in Hz
+        gainNode.gain.value = 0.1; // volume (0-1)
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.start();
+        setTimeout(function() {
+          oscillator.stop();
+        }, 100); // beep duration in ms
+      } catch (e) {
+        console.log('Beep sound not supported');
+      }
+      
+      // Show success message
+      showAlert('Barcode scanned successfully!', 'success', 'itemModalAlerts', true);
     }
   });
-  
-  // Print item details button
-  document.getElementById('printItemDetailsBtn').addEventListener('click', function() {
-    const itemId = document.getElementById('itemId').value;
     
-    if (itemId) {
-      fetchWithAuth(`${API_URL}/items/${itemId}`)
-        .then(response => {
-          if (response.ok) {
-            return response.json();
-          } else {
-            throw new Error('Failed to fetch item data');
-          }
-        })
-        .then(item => {
-          printItemDetails(item);
-        })
-        .catch(error => {
-          console.error('Error fetching item for printing:', error);
-          showAlert('Error preparing item details for printing', 'danger');
-        });
-    } else {
-      showAlert('Please save the item first before printing details', 'warning');
+    // Print barcode button
+    document.getElementById('printBarcodeBtn').addEventListener('click', function() {
+      // Get the item ID
+      const itemId = document.getElementById('itemId').value;
+      
+      // If we have an item ID, fetch the latest data and print
+      if (itemId) {
+        fetchWithAuth(`${API_URL}/items/${itemId}`)
+          .then(response => {
+            if (response.ok) {
+              return response.json();
+            } else {
+              throw new Error('Failed to fetch item data');
+            }
+          })
+          .then(item => {
+            printBarcode(item);
+          })
+          .catch(error => {
+            console.error('Error fetching item for printing:', error);
+            showAlert('Error preparing barcode for printing', 'danger');
+          });
+      } else {
+        // For new items that haven't been saved yet
+        showAlert('Please save the item first before printing the barcode', 'warning');
+      }
+    });
+    
+    // Print item details button
+    document.getElementById('printItemDetailsBtn').addEventListener('click', function() {
+      const itemId = document.getElementById('itemId').value;
+      
+      if (itemId) {
+        fetchWithAuth(`${API_URL}/items/${itemId}`)
+          .then(response => {
+            if (response.ok) {
+              return response.json();
+            } else {
+              throw new Error('Failed to fetch item data');
+            }
+          })
+          .then(item => {
+            printItemDetails(item);
+          })
+          .catch(error => {
+            console.error('Error fetching item for printing:', error);
+            showAlert('Error preparing item details for printing', 'danger');
+          });
+      } else {
+        showAlert('Please save the item first before printing details', 'warning');
+      }
+    });
+    
+    // Add document-wide keyboard event listener for barcode scanning
+    document.addEventListener('keydown', function(e) {
+      // If we're in a modal, don't trigger the global scanner
+      if (document.querySelector('.modal.show')) {
+        return;
+      }
+      
+      // If we're in a text input, textarea, or select, don't trigger the global scanner
+      if (document.activeElement.tagName === 'INPUT' || 
+          document.activeElement.tagName === 'TEXTAREA' || 
+          document.activeElement.tagName === 'SELECT') {
+        return;
+      }
+      
+      // Start focusing on the barcode input if typing starts
+      if (e.key.length === 1 && e.key.match(/[a-z0-9]/i)) {
+        const quickBarcodeSearch = document.getElementById('quickBarcodeSearch');
+        quickBarcodeSearch.focus();
+        // The scanner will continue typing into the now-focused field
+      }
+    });
+  }
+
+
+// Add this function for the beep sound
+function playBeepSound() {
+    try {
+      // Create a simple beep sound using Web Audio API
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 1000; // frequency in Hz
+      gainNode.gain.value = 0.1; // volume (0-1)
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.start();
+      setTimeout(function() {
+        oscillator.stop();
+      }, 100); // beep duration in ms
+    } catch (e) {
+      console.log('Beep sound not supported');
     }
-  });
-}
+  }
 
 
 
+// Update this function
 function toggleBarcodeInputMethod() {
     const isScanExisting = document.getElementById('scanExisting').checked;
     const scanBarcodeSection = document.getElementById('scanBarcodeSection');
@@ -336,31 +510,55 @@ function toggleBarcodeInputMethod() {
       console.error('Barcode sections not found in the DOM');
       return;
     }
+
+      // Immediately blur any focused elements to prevent focus issues when sections are hidden
+  document.activeElement.blur();
     
     if (isScanExisting) {
       scanBarcodeSection.classList.remove('d-none');
       generatedBarcodeSection.classList.add('d-none');
+      // Hide preview when using existing barcode
+      const previewSection = document.getElementById('previewGeneratedBarcode');
+      if (previewSection) {
+        previewSection.classList.add('d-none');
+      }
     } else {
       scanBarcodeSection.classList.add('d-none');
       generatedBarcodeSection.classList.remove('d-none');
       
-      // Show a preview of what the generated barcode might look like
-      previewGeneratedBarcode();
+      // Only show a preview of the generated barcode for new items
+      // or if explicitly changing from existing to generated
+      const itemId = document.getElementById('itemId').value;
+      const currentBarcodeDisplay = document.getElementById('currentBarcodeDisplay');
+      
+      // Only generate preview for new items or if we're changing barcode type
+      if (!itemId || (itemId && currentBarcodeDisplay.classList.contains('d-none'))) {
+        // Show a preview of what the generated barcode might look like
+        previewGeneratedBarcode();
+      } else {
+        // For existing items with barcodes, don't show preview
+        const previewSection = document.getElementById('previewGeneratedBarcode');
+        if (previewSection) {
+          previewSection.classList.add('d-none');
+        }
+      }
     }
   }
 
 
-
   function previewGeneratedBarcode() {
-    const prefix = 'CIME';
-    const timestamp = Date.now().toString();
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    const sampleBarcode = `${prefix}-${timestamp.substring(timestamp.length - 6)}-${random}`;
+    // Create a stable, cached barcode
+    if (!generatedBarcode) {
+      const prefix = 'CIME';
+      const timestamp = Date.now().toString();
+      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      generatedBarcode = `${prefix}-${timestamp.substring(timestamp.length - 6)}-${random}`;
+    }
     
     // Show preview section
     document.getElementById('previewGeneratedBarcode').classList.remove('d-none');
-    document.getElementById('generatedBarcodeValue').textContent = sampleBarcode;
-    
+    document.getElementById('generatedBarcodeValue').textContent = generatedBarcode;
+      
     // Generate visual preview if JsBarcode is available
     if (typeof JsBarcode !== 'undefined') {
       try {
@@ -369,8 +567,8 @@ function toggleBarcodeInputMethod() {
         document.getElementById('generatedBarcodeImage').innerHTML = '';
         document.getElementById('generatedBarcodeImage').appendChild(canvas);
         
-        // Generate the barcode
-        JsBarcode(canvas, sampleBarcode, {
+        // Generate the barcode - using generatedBarcode instead of sampleBarcode
+        JsBarcode(canvas, generatedBarcode, {
           format: "CODE128",
           lineColor: "#000",
           width: 2,
@@ -1377,149 +1575,398 @@ async function loadItemDetails(itemId, isEdit = false) {
   }
 
 // Open item modal with details
+// Fixed openItemModal function with null checks
 function openItemModal(item, isEdit = false) {
-  const modal = document.getElementById('itemModal');
-  const modalTitle = document.getElementById('itemModalTitle');
-  const form = document.getElementById('itemForm');
-  const saveBtn = document.getElementById('saveItemBtn');
-  const barcodeRow = document.getElementById('barcodeRow');
-  
-  // Set modal title
-  modalTitle.textContent = isEdit ? 'Edit Item' : 'Item Details';
-  
-  // Show/hide barcode section
-  barcodeRow.style.display = item._id ? 'block' : 'none';
-  
-  // Fill form fields
-  document.getElementById('itemId').value = item._id || '';
-  document.getElementById('itemName').value = item.name || '';
-  document.getElementById('itemCategory').value = item.category || '';
-  document.getElementById('itemStatus').value = item.status || 'Available';
-  document.getElementById('itemDescription').value = item.description || '';
-  document.getElementById('itemSerialNumber').value = item.serialNumber || '';
-  document.getElementById('itemManufacturer').value = item.manufacturer || '';
-  document.getElementById('itemSupplier').value = item.supplier ? item.supplier._id : '';
-  document.getElementById('itemQuantity').value = item.quantity || 1;
-  document.getElementById('itemUnit').value = item.unit || 'piece';
-  document.getElementById('itemUnitCost').value = item.unitCost || 0;
-  document.getElementById('itemReorderLevel').value = item.reorderLevel || 5;
-  
-  // Set location values and populate dropdowns
-  if (item.location) {
-    if (item.location.room) {
-      document.getElementById('itemRoom').value = item.location.room._id || '';
-      
-      // Populate rack dropdown
-      populateRackDropdown(item.location.room._id);
+  try {
+
+
+// Reset barcode editing state whenever the modal opens
+const changeBarcode = document.getElementById('changeBarcode');
+if (changeBarcode) {
+  changeBarcode.checked = false;
+}
+
+// Reset the barcode options form visibility
+const newBarcodeForm = document.getElementById('newBarcodeForm');
+if (newBarcodeForm) {
+  newBarcodeForm.classList.add('d-none');
+}
+
+
+    const modal = document.getElementById('itemModal');
+    const modalTitle = document.getElementById('itemModalTitle');
+    const form = document.getElementById('itemForm');
+    const saveBtn = document.getElementById('saveItemBtn');
+    
+    // Check if elements exist before proceeding
+    if (!modal || !modalTitle || !form || !saveBtn) {
+      console.error('Required modal elements not found');
+      showAlert('Error loading item modal. Please refresh the page and try again.', 'danger');
+      return;
     }
     
-    if (item.location.rack) {
-      document.getElementById('itemRack').value = item.location.rack._id || '';
+    // Reset generatedBarcode to ensure a fresh one if needed
+    generatedBarcode = null;
+    
+    // Set modal title
+    modalTitle.textContent = isEdit ? 'Edit Item' : 'Item Details';
+    
+    // Fill form fields
+    document.getElementById('itemId').value = item._id || '';
+    document.getElementById('itemName').value = item.name || '';
+    document.getElementById('itemCategory').value = item.category || '';
+    document.getElementById('itemStatus').value = item.status || 'Available';
+    document.getElementById('itemDescription').value = item.description || '';
+    document.getElementById('itemSerialNumber').value = item.serialNumber || '';
+    document.getElementById('itemManufacturer').value = item.manufacturer || '';
+    document.getElementById('itemSupplier').value = item.supplier ? item.supplier._id : '';
+    document.getElementById('itemQuantity').value = item.quantity || 1;
+    document.getElementById('itemUnit').value = item.unit || 'piece';
+    document.getElementById('itemUnitCost').value = item.unitCost || 0;
+    document.getElementById('itemReorderLevel').value = item.reorderLevel || 5;
+    
+    // Set location values and populate dropdowns
+    if (item.location) {
+      if (item.location.room) {
+        document.getElementById('itemRoom').value = item.location.room._id || '';
+        populateRackDropdown(item.location.room._id);
+      }
       
-      // Populate shelf dropdown
-      populateShelfDropdown(item.location.room._id, item.location.rack._id);
+      if (item.location.rack) {
+        document.getElementById('itemRack').value = item.location.rack._id || '';
+        populateShelfDropdown(item.location.room._id, item.location.rack._id);
+      }
+      
+      if (item.location.shelf) {
+        document.getElementById('itemShelf').value = item.location.shelf._id || '';
+      }
     }
     
-    if (item.location.shelf) {
-      document.getElementById('itemShelf').value = item.location.shelf._id || '';
+    // Set dates if available
+    if (item.purchaseDate) {
+      document.getElementById('itemPurchaseDate').value = new Date(item.purchaseDate).toISOString().split('T')[0];
+    } else {
+      document.getElementById('itemPurchaseDate').value = '';
+    }
+    
+    if (item.lastMaintenanceDate) {
+      document.getElementById('itemLastMaintenanceDate').value = new Date(item.lastMaintenanceDate).toISOString().split('T')[0];
+    } else {
+      document.getElementById('itemLastMaintenanceDate').value = '';
+    }
+    
+    if (item.nextMaintenanceDate) {
+      document.getElementById('itemNextMaintenanceDate').value = new Date(item.nextMaintenanceDate).toISOString().split('T')[0];
+    } else {
+      document.getElementById('itemNextMaintenanceDate').value = '';
+    }
+    
+    document.getElementById('itemNotes').value = item.notes || '';
+    
+    // Handle the barcode section - simplified for better user experience
+    const barcodeRow = document.getElementById('barcodeRow');
+    if (barcodeRow) {
+      barcodeRow.style.display = 'block';
+    }
+    
+    const currentBarcodeDisplay = document.getElementById('currentBarcodeDisplay');
+    const barcodeOptionsSection = document.getElementById('barcodeOptionsSection');
+    const changeBarcodeSection = document.getElementById('changeBarcodeSection');
+    const newBarcodeOptionsSection = document.getElementById('newBarcodeOptionsSection');
+    
+    // Default value for barcode input
+    document.getElementById('itemBarcode').value = item.barcode || '';
+    
+    if (item._id && item.barcode) {
+      // EXISTING ITEM WITH BARCODE
+      
+      // 1. Show current barcode
+      if (currentBarcodeDisplay) {
+        currentBarcodeDisplay.classList.remove('d-none');
+        document.getElementById('currentBarcodeValue').textContent = item.barcode;
+        
+        // Display barcode type
+        const barcodeTypeText = item.barcodeType === 'existing' ? 
+          'Manufacturer Barcode' : 'Generated System Barcode';
+        document.getElementById('currentBarcodeType').textContent = barcodeTypeText;
+        
+        // Display barcode image
+        try {
+          const currentBarcodeImage = document.getElementById('currentBarcodeImage');
+          currentBarcodeImage.innerHTML = '';
+          
+          if (typeof JsBarcode !== 'undefined') {
+            const canvas = document.createElement('canvas');
+            currentBarcodeImage.appendChild(canvas);
+            
+            JsBarcode(canvas, item.barcode, {
+              format: "CODE128",
+              lineColor: "#000",
+              width: 2,
+              height: 50,
+              displayValue: false
+            });
+          }
+        } catch (error) {
+          console.error('Error generating barcode display:', error);
+        }
+      }
+      
+      // 2. For edit mode, show change barcode option
+      if (isEdit) {
+        // Hide original barcode options and show change option
+        if (barcodeOptionsSection) barcodeOptionsSection.classList.add('d-none');
+        if (changeBarcodeSection) changeBarcodeSection.classList.remove('d-none');
+      } else {
+        // View mode - hide all options
+        if (barcodeOptionsSection) barcodeOptionsSection.classList.add('d-none');
+        if (changeBarcodeSection) changeBarcodeSection.classList.add('d-none');
+      }
+    } else if (item._id && !item.barcode) {
+      // EXISTING ITEM WITHOUT BARCODE (rare case)
+      
+      // Hide current barcode display
+      if (currentBarcodeDisplay) currentBarcodeDisplay.classList.add('d-none');
+      
+      // In edit mode, show options to add a barcode
+      if (isEdit) {
+        if (barcodeOptionsSection) barcodeOptionsSection.classList.remove('d-none');
+        if (newBarcodeOptionsSection) newBarcodeOptionsSection.classList.remove('d-none');
+        if (changeBarcodeSection) changeBarcodeSection.classList.add('d-none');
+        
+        // Default to scanning an existing barcode
+        document.getElementById('scanExisting').checked = true;
+        document.getElementById('generateNew').checked = false;
+        toggleBarcodeInputMethod();
+      } else {
+        // View mode - hide all options
+        if (barcodeOptionsSection) barcodeOptionsSection.classList.add('d-none');
+      }
+    } else {
+      // NEW ITEM
+      
+      // Hide current barcode display and change options
+      if (currentBarcodeDisplay) currentBarcodeDisplay.classList.add('d-none');
+      if (changeBarcodeSection) changeBarcodeSection.classList.add('d-none');
+      
+      // Show barcode type options
+      if (barcodeOptionsSection) barcodeOptionsSection.classList.remove('d-none');
+      if (newBarcodeOptionsSection) newBarcodeOptionsSection.classList.remove('d-none');
+      
+      // Default to generating a new barcode for new items
+      document.getElementById('scanExisting').checked = false;
+      document.getElementById('generateNew').checked = true;
+      toggleBarcodeInputMethod();
+    }
+    
+    // Set form fields readonly or editable based on mode
+    const formFields = form.querySelectorAll('input, textarea, select');
+    formFields.forEach(field => {
+      field.readOnly = !isEdit;
+      if (field.tagName === 'SELECT') {
+        field.disabled = !isEdit;
+      }
+    });
+    
+    // Show/hide save button based on mode
+    saveBtn.style.display = isEdit ? 'block' : 'none';
+    
+    // Open the modal
+    const modalInstance = new bootstrap.Modal(modal);
+    modalInstance.show();
+  } catch (error) {
+    console.error('Error in openItemModal:', error);
+    showAlert('Error loading item details. Please try again.', 'danger');
+  }
+}
+  
+  // Helper function to safely set element values
+  function setElementValue(elementId, value) {
+    const element = document.getElementById(elementId);
+    if (element) {
+      if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+        element.value = value;
+      } else if (element.tagName === 'SELECT') {
+        element.value = value;
+      } else {
+        element.textContent = value;
+      }
     }
   }
   
-  // Set dates if available
-  if (item.purchaseDate) {
-    document.getElementById('itemPurchaseDate').value = new Date(item.purchaseDate).toISOString().split('T')[0];
-  } else {
-    document.getElementById('itemPurchaseDate').value = '';
-  }
-  
-  if (item.lastMaintenanceDate) {
-    document.getElementById('itemLastMaintenanceDate').value = new Date(item.lastMaintenanceDate).toISOString().split('T')[0];
-  } else {
-    document.getElementById('itemLastMaintenanceDate').value = '';
-  }
-  
-  if (item.nextMaintenanceDate) {
-    document.getElementById('itemNextMaintenanceDate').value = new Date(item.nextMaintenanceDate).toISOString().split('T')[0];
-  } else {
-    document.getElementById('itemNextMaintenanceDate').value = '';
-  }
-  
-  document.getElementById('itemNotes').value = item.notes || '';
-  
-   // Handle barcode display and options
-   const currentBarcodeDisplay = document.getElementById('currentBarcodeDisplay');
-  
-   if (item._id && item.barcode) {
-     // For existing items with barcodes
-     currentBarcodeDisplay.classList.remove('d-none');
-     document.getElementById('currentBarcodeValue').textContent = item.barcode;
-     
-     // Display the barcode type
-     const barcodeTypeText = item.barcodeType === 'existing' ? 
-       'Manufacturer Barcode' : 'Generated System Barcode';
-     document.getElementById('currentBarcodeType').textContent = barcodeTypeText;
-     
-     // Display barcode image if available
-     if (item.barcodeImageUrl) {
-       document.getElementById('currentBarcodeImage').innerHTML = 
-         `<img src="${item.barcodeImageUrl}" alt="Barcode" class="img-fluid">`;
-     } else if (typeof JsBarcode !== 'undefined') {
-       // Generate linear barcode for display
-       try {
-         const canvas = document.createElement('canvas');
-         document.getElementById('currentBarcodeImage').innerHTML = '';
-         document.getElementById('currentBarcodeImage').appendChild(canvas);
-         
-         JsBarcode(canvas, item.barcode, {
-           format: "CODE128",
-           lineColor: "#000",
-           width: 2,
-           height: 50,
-           displayValue: false
-         });
-       } catch (error) {
-         console.error('Error generating barcode display:', error);
-         document.getElementById('currentBarcodeImage').innerHTML = 
-           '<div class="text-muted">Barcode display unavailable</div>';
-       }
-     }
-   } else {
-     // For new items without barcodes yet
-     currentBarcodeDisplay.classList.add('d-none');
-   }
-   
-   // Set barcode options based on mode and existing data
-   if (isEdit && item.barcodeType) {
-     // For editing existing items
-     if (item.barcodeType === 'existing') {
-       document.getElementById('scanExisting').checked = true;
-       document.getElementById('itemBarcode').value = item.barcode || '';
-     } else {
-       document.getElementById('generateNew').checked = true;
-     }
-     
-     // Update the display of barcode input sections
-     toggleBarcodeInputMethod();
-   } else if (!isEdit) {
-     // For view mode, just set the barcode field
-     document.getElementById('itemBarcode').value = item.barcode || '';
-   }
-  
-  // Set form fields readonly or editable based on mode
-  const formFields = form.querySelectorAll('input, textarea, select');
-  formFields.forEach(field => {
-    field.readOnly = !isEdit;
-    if (field.tagName === 'SELECT') {
-      field.disabled = !isEdit;
+  // Update the toggleBarcodeInputMethod function with null checks
+  function toggleBarcodeInputMethod() {
+    // Safely get elements
+    const scanExisting = document.getElementById('scanExisting');
+    const scanBarcodeSection = document.getElementById('scanBarcodeSection');
+    const generatedBarcodeSection = document.getElementById('generatedBarcodeSection');
+    
+    // Check if necessary elements exist
+    if (!scanExisting || !scanBarcodeSection || !generatedBarcodeSection) {
+      console.error('Barcode sections not found in the DOM', {
+        scanExisting,
+        scanBarcodeSection,
+        generatedBarcodeSection
+      });
+      return;
     }
-  });
+    
+    const isScanExisting = scanExisting.checked;
+    
+    if (isScanExisting) {
+      scanBarcodeSection.classList.remove('d-none');
+      generatedBarcodeSection.classList.add('d-none');
+      // Hide preview when using existing barcode
+      const previewSection = document.getElementById('previewGeneratedBarcode');
+      if (previewSection) {
+        previewSection.classList.add('d-none');
+      }
+    } else {
+      scanBarcodeSection.classList.add('d-none');
+      generatedBarcodeSection.classList.remove('d-none');
+      
+      // Only show a preview of the generated barcode if appropriate
+      try {
+        // Show a preview of what the generated barcode might look like
+        previewGeneratedBarcode();
+      } catch (e) {
+        console.error('Error generating barcode preview:', e);
+      }
+    }
+  }
+
+
+
+  // function toggleChangeBarcode() {
+  //   const changeBarcodeCheckbox = document.getElementById('changeBarcode');
+  //   const scanBarcodeSection = document.getElementById('scanBarcodeSection');
+  //   const generatedBarcodeSection = document.getElementById('generatedBarcodeSection');
+  //   const barcodeTypeOptions = document.getElementById('barcodeTypeOptions');
+    
+  //   if (changeBarcodeCheckbox.checked) {
+  //     // Show barcode type options
+  //     if (barcodeTypeOptions) barcodeTypeOptions.classList.remove('d-none');
+      
+  //     // Check which option is selected and show appropriate section
+  //     const useExisting = document.getElementById('changeToBarcodeExisting');
+  //     if (useExisting && useExisting.checked) {
+  //       scanBarcodeSection.classList.remove('d-none');
+  //       generatedBarcodeSection.classList.add('d-none');
+  //     } else {
+  //       scanBarcodeSection.classList.add('d-none');
+  //       generatedBarcodeSection.classList.remove('d-none');
+  //       previewGeneratedBarcode();
+  //     }
+  //   } else {
+  //     // Hide all barcode change options
+  //     scanBarcodeSection.classList.add('d-none');
+  //     generatedBarcodeSection.classList.add('d-none');
+  //     if (barcodeTypeOptions) barcodeTypeOptions.classList.add('d-none');
+  //   }
+  // }
+
+  function toggleChangeBarcode() {
+    const changeBarcode = document.getElementById('changeBarcode');
+    const newBarcodeForm = document.getElementById('newBarcodeForm');
+    
+    if (changeBarcode && newBarcodeForm) {
+      if (changeBarcode.checked) {
+        newBarcodeForm.classList.remove('d-none');
+        
+        // Initialize the radio buttons - default to using existing barcode
+        const useExistingBarcode = document.getElementById('useExistingBarcode');
+        const generateNewBarcode = document.getElementById('generateNewBarcode');
+        
+        if (useExistingBarcode && !useExistingBarcode.checked && !generateNewBarcode.checked) {
+          useExistingBarcode.checked = true;
+        }
+        
+        // Show/hide the appropriate form sections
+        updateBarcodeFormVisibility();
+      } else {
+        newBarcodeForm.classList.add('d-none');
+      }
+    }
+  }
+
+
+
+// function to update the visibility of barcode form sections
+function updateBarcodeFormVisibility() {
+  const useExistingBarcode = document.getElementById('useExistingBarcode');
+  const generateNewBarcode = document.getElementById('generateNewBarcode');
+  const newBarcodeInput = document.getElementById('newBarcodeInput');
+  const barcodeGenerationInfo = document.getElementById('barcodeGenerationInfo');
   
-  // Show/hide save button based on mode
-  saveBtn.style.display = isEdit ? 'block' : 'none';
+  if (useExistingBarcode && generateNewBarcode) {
+    if (useExistingBarcode.checked) {
+      if (newBarcodeInput) newBarcodeInput.style.display = 'block';
+      if (barcodeGenerationInfo) barcodeGenerationInfo.style.display = 'none';
+    } else if (generateNewBarcode.checked) {
+      if (newBarcodeInput) newBarcodeInput.style.display = 'none';
+      if (barcodeGenerationInfo) barcodeGenerationInfo.style.display = 'block';
+    }
+  }
+}
+
+
+
+
+function setupBarcodeChangeListeners() {
+  const changeBarcodeCheckbox = document.getElementById('changeBarcode');
+  if (changeBarcodeCheckbox) {
+    changeBarcodeCheckbox.addEventListener('change', toggleChangeBarcode);
+  }
   
-  // Open the modal
-  const modalInstance = new bootstrap.Modal(modal);
-  modalInstance.show();
+  const changeToBarcodeExisting = document.getElementById('changeToBarcodeExisting');
+  const changeToBarcodeGenerate = document.getElementById('changeToBarcodeGenerate');
+  
+  
+  if (changeToBarcodeExisting && changeToBarcodeGenerate) {
+    changeToBarcodeExisting.addEventListener('change', function() {
+      if (this.checked) {
+        document.getElementById('scanBarcodeSection').classList.remove('d-none');
+        document.getElementById('generatedBarcodeSection').classList.add('d-none');
+      }
+    });
+    
+    changeToBarcodeGenerate.addEventListener('change', function() {
+      if (this.checked) {
+        document.getElementById('scanBarcodeSection').classList.add('d-none');
+        document.getElementById('generatedBarcodeSection').classList.remove('d-none');
+        previewGeneratedBarcode();
+      }
+    });
+  }
+  
+  // listeners for the useExistingBarcode and generateNewBarcode elements
+  const useExistingBarcode = document.getElementById('useExistingBarcode');
+  const generateNewBarcode = document.getElementById('generateNewBarcode');
+  
+  if (useExistingBarcode && generateNewBarcode) {
+    useExistingBarcode.addEventListener('change', updateBarcodeFormVisibility);
+    generateNewBarcode.addEventListener('change', updateBarcodeFormVisibility);
+  }
+}
+
+
+
+
+function updateBarcodeFormVisibility() {
+  const useExistingBarcode = document.getElementById('useExistingBarcode');
+  const generateNewBarcode = document.getElementById('generateNewBarcode');
+  const newBarcodeInput = document.getElementById('newBarcodeInput');
+  const barcodeGenerationInfo = document.getElementById('barcodeGenerationInfo');
+  
+  if (useExistingBarcode && generateNewBarcode) {
+    if (useExistingBarcode.checked) {
+      if (newBarcodeInput) newBarcodeInput.style.display = 'block';
+      if (barcodeGenerationInfo) barcodeGenerationInfo.style.display = 'none';
+    } else if (generateNewBarcode.checked) {
+      if (newBarcodeInput) newBarcodeInput.style.display = 'none';
+      if (barcodeGenerationInfo) barcodeGenerationInfo.style.display = 'block';
+    }
+  }
 }
 
 // Open transaction modal
@@ -1576,147 +2023,301 @@ function updateTransactionForm(type) {
   }
 }
 
+
+
+
+// Create a utility function to properly close modals
+function safeCloseModal(modalElement) {
+  if (!modalElement) return;
+  
+  // First, shift focus away from any elements inside the modal
+  document.body.focus();
+  
+  // Get the modal instance
+  const modalInstance = bootstrap.Modal.getInstance(modalElement);
+  if (!modalInstance) return;
+  
+  // Hide the modal
+  modalInstance.hide();
+  
+  // Clean up after the modal is hidden
+  setTimeout(() => {
+    // Remove aria-hidden attribute
+    modalElement.removeAttribute('aria-hidden');
+    
+    // Remove modal-open class from body
+    document.body.classList.remove('modal-open');
+    
+    // Reset other modal-related styles
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+    
+    // Remove any leftover backdrops
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+      backdrop.remove();
+    });
+    
+    // Make sure display style is set to none
+    modalElement.style.display = 'none';
+  }, 300); // Allow time for the modal hide animation to complete
+}
+
+
+
 // Save item
-async function saveItem() {
-    try {
-      // Get form data
-      const itemId = document.getElementById('itemId').value;
-      const name = document.getElementById('itemName').value;
-      const category = document.getElementById('itemCategory').value;
-      const status = document.getElementById('itemStatus').value;
-      const description = document.getElementById('itemDescription').value;
-      const serialNumber = document.getElementById('itemSerialNumber').value;
-      const manufacturer = document.getElementById('itemManufacturer').value;
-      const supplier = document.getElementById('itemSupplier').value;
-      const quantity = document.getElementById('itemQuantity').value;
-      const unit = document.getElementById('itemUnit').value;
-      const unitCost = document.getElementById('itemUnitCost').value;
-      const reorderLevel = document.getElementById('itemReorderLevel').value;
-      const room = document.getElementById('itemRoom').value;
-      const rack = document.getElementById('itemRack').value;
-      const shelf = document.getElementById('itemShelf').value;
-      const purchaseDate = document.getElementById('itemPurchaseDate').value;
-      const lastMaintenanceDate = document.getElementById('itemLastMaintenanceDate').value;
-      const nextMaintenanceDate = document.getElementById('itemNextMaintenanceDate').value;
-      const notes = document.getElementById('itemNotes').value;
+function saveItem() {
+  try {
+    console.log('Save item function called');
+    
+    // Get form data
+    const itemId = document.getElementById('itemId').value;
+    const name = document.getElementById('itemName').value;
+    const category = document.getElementById('itemCategory').value;
+    const status = document.getElementById('itemStatus').value;
+    const description = document.getElementById('itemDescription').value;
+    const serialNumber = document.getElementById('itemSerialNumber').value;
+    const manufacturer = document.getElementById('itemManufacturer').value;
+    const supplier = document.getElementById('itemSupplier').value;
+    const quantity = document.getElementById('itemQuantity').value;
+    const unit = document.getElementById('itemUnit').value;
+    const unitCost = document.getElementById('itemUnitCost').value;
+    const reorderLevel = document.getElementById('itemReorderLevel').value;
+    const room = document.getElementById('itemRoom').value;
+    const rack = document.getElementById('itemRack').value;
+    const shelf = document.getElementById('itemShelf').value;
+    const purchaseDate = document.getElementById('itemPurchaseDate').value;
+    const lastMaintenanceDate = document.getElementById('itemLastMaintenanceDate').value;
+    const nextMaintenanceDate = document.getElementById('itemNextMaintenanceDate').value;
+    const notes = document.getElementById('itemNotes').value;
+    
+    console.log('Form data collected:', {
+      itemId, name, category, status, quantity, unitCost, room
+    });
+    
+    // Handle barcode data
+    let barcodeType;
+    let barcode;
+    
+    // Check if we have the new change barcode UI
+    const changeBarcode = document.getElementById('changeBarcode');
+    
+    if (itemId) {
+      // EXISTING ITEM
+      console.log('Processing existing item with ID:', itemId);
       
-      // Get barcode option and value
-      const barcodeType = document.getElementById('scanExisting').checked ? 'existing' : 'generate';
-      const barcode = document.getElementById('itemBarcode').value;
-      
-      // Validate barcode if using existing
-      if (barcodeType === 'existing' && !barcode) {
-        showAlert('Please enter or scan the existing barcode', 'warning');
-        return;
-      }
-      
-      // Validate required fields
-      if (!name || !category || !quantity || !unitCost || !room) {
-        showAlert('Please fill in all required fields', 'danger');
-        return;
-      }
-      
-      // Prepare item data
-      const itemData = {
-        name,
-        category,
-        status,
-        description,
-        serialNumber,
-        barcode: barcodeType === 'existing' ? barcode : '',
-        barcodeType,
-        manufacturer,
-        supplier: supplier || undefined,
-        quantity: parseInt(quantity),
-        unit,
-        unitCost: parseFloat(unitCost),
-        reorderLevel: parseInt(reorderLevel),
-        location: {
-          room,
-          rack: rack || undefined,
-          shelf: shelf || undefined
-        },
-        purchaseDate: purchaseDate || undefined,
-        lastMaintenanceDate: lastMaintenanceDate || undefined,
-        nextMaintenanceDate: nextMaintenanceDate || undefined,
-        notes
-      };
-      
-      // Show loading state
-      const saveBtn = document.getElementById('saveItemBtn');
-      saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Saving...';
-      saveBtn.disabled = true;
-      
-      let response;
-      let messagePrefix;
-      
-      if (itemId) {
-        // Update existing item
-        response = await fetchWithAuth(`${API_URL}/items/${itemId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(itemData)
-        });
-        messagePrefix = 'Item updated';
+      if (changeBarcode && changeBarcode.checked) {
+        // User wants to change the barcode
+        console.log('User is changing the barcode');
+        const useExistingBarcode = document.getElementById('useExistingBarcode');
+        
+        if (useExistingBarcode && useExistingBarcode.checked) {
+          // Using a new manually entered barcode
+          barcode = document.getElementById('newItemBarcode')?.value || '';
+          barcodeType = 'existing';
+          console.log('Using new manually entered barcode:', barcode);
+        } else {
+          // Generate a new barcode
+          barcodeType = 'generate';
+          barcode = '';
+          console.log('Will generate a new barcode on server');
+        }
       } else {
-        // Create new item
-        response = await fetchWithAuth(`${API_URL}/items`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(itemData)
-        });
-        messagePrefix = 'Item created';
+        // Keep existing barcode
+        const currentBarcodeValue = document.getElementById('currentBarcodeValue');
+        const currentBarcodeType = document.getElementById('currentBarcodeType');
+        
+        if (currentBarcodeValue) {
+          barcode = currentBarcodeValue.textContent;
+          barcodeType = currentBarcodeType && currentBarcodeType.textContent.includes('Manufacturer') ? 
+            'existing' : 'generate';
+          
+          console.log('Keeping existing barcode:', barcode, 'of type:', barcodeType);
+        } else {
+          // Fallback to original UI
+          barcodeType = document.getElementById('scanExisting')?.checked ? 'existing' : 'generate';
+          barcode = barcodeType === 'existing' ? document.getElementById('itemBarcode')?.value || '' : '';
+          console.log('Using fallback barcode handling:', barcode, 'of type:', barcodeType);
+        }
       }
+    } else {
+      // NEW ITEM
+      console.log('Processing new item');
       
+      const scanExisting = document.getElementById('scanExisting');
+      
+      if (scanExisting) {
+        barcodeType = scanExisting.checked ? 'existing' : 'generate';
+        barcode = barcodeType === 'existing' ? document.getElementById('itemBarcode')?.value || '' : '';
+        console.log('New item barcode handling:', barcode, 'of type:', barcodeType);
+      } else {
+        // Default to generating a barcode
+        barcodeType = 'generate';
+        barcode = '';
+        console.log('Defaulting to generating a barcode');
+      }
+    }
+    
+    // Validate barcode if using existing
+    if (barcodeType === 'existing' && !barcode) {
+      console.warn('Missing barcode for existing barcode type');
+      showAlert('Please enter or scan the existing barcode', 'warning');
+      return;
+    }
+    
+    // Validate required fields
+    if (!name || !category || !quantity || !unitCost || !room) {
+      console.warn('Missing required fields');
+      showAlert('Please fill in all required fields', 'danger');
+      return;
+    }
+    
+    // Prepare item data
+    const itemData = {
+      name,
+      category,
+      status,
+      description,
+      serialNumber,
+      barcode,
+      barcodeType,
+      manufacturer,
+      supplier: supplier || undefined,
+      quantity: parseInt(quantity),
+      unit,
+      unitCost: parseFloat(unitCost),
+      reorderLevel: parseInt(reorderLevel),
+      location: {
+        room,
+        rack: rack || undefined,
+        shelf: shelf || undefined
+      },
+      purchaseDate: purchaseDate || undefined,
+      lastMaintenanceDate: lastMaintenanceDate || undefined,
+      nextMaintenanceDate: nextMaintenanceDate || undefined,
+      notes
+    };
+    
+    console.log('Prepared item data:', itemData);
+    
+    // Show loading state
+    const saveBtn = document.getElementById('saveItemBtn');
+    if (!saveBtn) {
+      console.error('Save button not found');
+      showAlert('Error: Save button not found', 'danger');
+      return;
+    }
+    
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Saving...';
+    saveBtn.disabled = true;
+    
+    // Determine if this is a create or update operation
+    const apiUrl = itemId ? 
+      `${API_URL}/items/${itemId}` : 
+      `${API_URL}/items`;
+    
+    const method = itemId ? 'PUT' : 'POST';
+    const messagePrefix = itemId ? 'Item updated' : 'Item created';
+    
+    console.log(`Making ${method} request to ${apiUrl}`);
+    
+    // Make API request
+    fetchWithAuth(apiUrl, {
+      method: method,
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(itemData)
+    })
+    .then(response => {
       // Reset button state
       saveBtn.innerHTML = 'Save Item';
       saveBtn.disabled = false;
       
       if (!response) {
+        console.error('No response from server');
         showAlert('Failed to connect to server', 'danger');
         return;
       }
       
+      console.log('API response status:', response.status);
+      
       if (response.ok) {
-        const item = await response.json();
-        
-        // Close modal
-        bootstrap.Modal.getInstance(document.getElementById('itemModal')).hide();
-        
-        // Show success message
-        showAlert(`${messagePrefix} successfully`, 'success');
-        
-        // If a barcode was generated, ask if they want to print it
-        if (!itemId && item.barcodeType === 'generate') {
-          if (confirm('A new barcode has been generated. Would you like to print it now?')) {
-            printBarcode(item);
+        return response.json().then(item => {
+          console.log('Item saved successfully:', item);
+          
+          // // Close modal properly
+          // const modal = document.getElementById('itemModal');
+          // if (modal) {
+          //   const modalInstance = bootstrap.Modal.getInstance(modal);
+          //   if (modalInstance) {
+          //     modalInstance.hide();
+              
+          //     // Fix ARIA issues after modal closes
+          //     setTimeout(() => {
+          //       document.body.classList.remove('modal-open');
+          //       document.body.style.overflow = '';
+          //       document.body.style.paddingRight = '';
+                
+          //       const modalBackdrops = document.querySelectorAll('.modal-backdrop');
+          //       modalBackdrops.forEach(backdrop => backdrop.remove());
+                
+          //       modal.removeAttribute('aria-hidden');
+          //       modal.style.display = 'none';
+          //     }, 300);
+          //   }
+          // }
+
+
+          // Safely close modal 
+    const modal = document.getElementById('itemModal');
+    safeCloseModal(modal);
+          
+          // Show success message
+          showAlert(`${messagePrefix} successfully`, 'success');
+          
+          // If a barcode was generated, ask if they want to print it
+          if ((!itemId && item.barcodeType === 'generate') || 
+              (itemId && barcodeType === 'generate' && changeBarcode?.checked)) {
+            if (confirm('A new barcode has been generated. Would you like to print it now?')) {
+              printBarcode(item);
+            }
           }
-        }
-        
-        // Reload inventory
-        loadInventoryItems();
+          
+          // Reload inventory
+          loadInventoryItems();
+        });
       } else {
-        try {
-          const errorData = await response.json();
-          showAlert(errorData.message || `Failed to ${itemId ? 'update' : 'create'} item`, 'danger');
-        } catch (e) {
-          showAlert(`Failed to ${itemId ? 'update' : 'create'} item`, 'danger');
-        }
+        return response.json()
+          .then(errorData => {
+            console.error('API error:', errorData);
+            showAlert(errorData.message || `Failed to ${itemId ? 'update' : 'create'} item`, 'danger');
+          })
+          .catch(e => {
+            console.error('Error parsing API error response:', e);
+            showAlert(`Failed to ${itemId ? 'update' : 'create'} item`, 'danger');
+          });
       }
-    } catch (error) {
+    })
+    .catch(error => {
       console.error('Save item error:', error);
       showAlert('Failed to connect to server. Please try again.', 'danger');
       
       // Reset button state
-      const saveBtn = document.getElementById('saveItemBtn');
+      saveBtn.innerHTML = 'Save Item';
+      saveBtn.disabled = false;
+    });
+  } catch (error) {
+    console.error('Unexpected error in saveItem function:', error);
+    showAlert('An unexpected error occurred. Please try again.', 'danger');
+    
+    // Reset button state
+    const saveBtn = document.getElementById('saveItemBtn');
+    if (saveBtn) {
       saveBtn.innerHTML = 'Save Item';
       saveBtn.disabled = false;
     }
   }
+}
 // Save transaction
 async function saveTransaction() {
   try {
@@ -1912,8 +2513,8 @@ function setupEventListeners() {
       loadInventoryItems();
     });
     
-    // Add new item button
-    const addItemBtn = document.getElementById('addItemBtn');
+// Add new item button
+const addItemBtn = document.getElementById('addItemBtn');
 if (addItemBtn) {
   addItemBtn.addEventListener('click', () => {
     // Reset form
@@ -1924,8 +2525,30 @@ if (addItemBtn) {
     const itemId = document.getElementById('itemId');
     if (itemId) itemId.value = '';
     
-    // Reset barcode elements
-    document.getElementById('currentBarcodeDisplay').classList.add('d-none');
+    // IMPORTANT: Completely reset the barcode section to its original state
+    // Hide the current barcode display
+    const currentBarcodeDisplay = document.getElementById('currentBarcodeDisplay');
+    if (currentBarcodeDisplay) currentBarcodeDisplay.classList.add('d-none');
+    
+    // Hide the change barcode section (this is only for editing)
+    const changeBarcodeSection = document.getElementById('changeBarcodeSection');
+    if (changeBarcodeSection) changeBarcodeSection.classList.add('d-none');
+    
+    // Reset the change barcode checkbox if it exists
+    const changeBarcode = document.getElementById('changeBarcode');
+    if (changeBarcode) changeBarcode.checked = false;
+    
+    // Hide the new barcode form (part of change barcode)
+    const newBarcodeForm = document.getElementById('newBarcodeForm');
+    if (newBarcodeForm) newBarcodeForm.classList.add('d-none');
+    
+    // Show the original barcode options section for new items
+    const barcodeOptionsSection = document.getElementById('barcodeOptionsSection');
+    if (barcodeOptionsSection) barcodeOptionsSection.classList.remove('d-none');
+    
+    // Show new barcode options section (radio buttons)
+    const newBarcodeOptionsSection = document.getElementById('newBarcodeOptionsSection');
+    if (newBarcodeOptionsSection) newBarcodeOptionsSection.classList.remove('d-none');
     
     // Set barcode radio buttons to default (generate)
     if (document.getElementById('generateNew')) {
@@ -1964,7 +2587,6 @@ if (addItemBtn) {
     if (barcodeRow) barcodeRow.style.display = 'block';
   });
 }
-
 
     
     // Handle modal hidden event (add this as a separate section)

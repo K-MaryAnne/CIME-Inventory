@@ -1,0 +1,218 @@
+/* public/css/scanner.css */
+
+/* Barcode scanner input styles */
+.barcode-input {
+    font-family: monospace;
+    letter-spacing: 1px;
+    height: 50px;
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+  }
+  
+  .highlight-scan {
+    animation: highlight-flash 0.5s;
+  }
+  
+  @keyframes highlight-flash {
+    0% {
+      background-color: #ffffff;
+      border-color: #ced4da;
+    }
+    30% {
+      background-color: #d4edda;
+      border-color: #00843d;
+    }
+    100% {
+      background-color: #ffffff;
+      border-color: #ced4da;
+    }
+  }
+  
+  .focus-highlight {
+    border-color: #00843d !important;
+    box-shadow: 0 0 0 0.25rem rgba(0, 132, 61, 0.25) !important;
+    animation: pulsate 2s infinite;
+  }
+  
+  @keyframes pulsate {
+    0% {
+      box-shadow: 0 0 0 0.25rem rgba(0, 132, 61, 0.25);
+    }
+    50% {
+      box-shadow: 0 0 0 0.25rem rgba(0, 132, 61, 0.5);
+    }
+    100% {
+      box-shadow: 0 0 0 0.25rem rgba(0, 132, 61, 0.25);
+    }
+  }
+  
+  .scan-active {
+    box-shadow: 0 0 0 3px rgba(0, 132, 61, 0.5);
+    transition: all 0.3s;
+  }
+  
+  /* Transaction button grid */
+  .transaction-btn-group {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  
+  @media (min-width: 768px) {
+    .transaction-btn-group {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+  
+  /* Transaction buttons */
+  .transaction-btn {
+    height: 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    line-height: 1.2;
+    transition: all 0.3s ease;
+  }
+  
+  .transaction-btn i {
+    margin-bottom: 5px;
+    font-size: 1.2rem;
+  }
+  
+  .transaction-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+  }
+  
+  .transaction-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  /* Status badges */
+  .status-badge {
+    display: inline-block;
+    padding: 0.35em 0.65em;
+    font-size: 0.75em;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.25rem;
+  }
+  
+  .status-available {
+    color: #fff;
+    background-color: #198754;
+  }
+  
+  .status-maintenance {
+    color: #000;
+    background-color: #ffc107;
+  }
+  
+  .status-outofstock {
+    color: #fff;
+    background-color: #dc3545;
+  }
+  
+  .status-rented {
+    color: #fff;
+    background-color: #0dcaf0;
+  }
+  
+  /* Item details area */
+  #itemDetails {
+    min-height: 300px;
+    transition: all 0.3s ease;
+  }
+  
+  /* Barcode display */
+  #barcodeDisplay {
+    display: inline-block;
+    background-color: white;
+    padding: 10px;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  
+  /* Scanner tips section */
+  .scanner-tips {
+    font-size: 0.9rem;
+  }
+  
+  .scanner-tips ul {
+    padding-left: 1.5rem;
+  }
+  
+  .scanner-tips li {
+    margin-bottom: 0.5rem;
+  }
+  
+  /* Alert modifications */
+  .alert {
+    margin-bottom: 1rem;
+    border-radius: 0.375rem;
+    position: relative;
+    padding: 1rem 1rem;
+    border: 1px solid transparent;
+  }
+  
+  /* Scanner welcome message */
+  .scanner-welcome {
+    padding: 2rem;
+    text-align: center;
+    background-color: #f8f9fa;
+    border-radius: 0.5rem;
+  }
+  
+  .scanner-welcome i {
+    font-size: 3rem;
+    color: #00843d;
+    margin-bottom: 1rem;
+  }
+  
+  .scanner-welcome h4 {
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+  
+  /* Print styles */
+  @media print {
+    .sidebar, 
+    .navbar, 
+    .card-header button,
+    .btn-toolbar,
+    #scannerCard,
+    #itemActions,
+    .btn {
+      display: none !important;
+    }
+    
+    main {
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    
+    .card {
+      border: none !important;
+      box-shadow: none !important;
+    }
+    
+    body {
+      padding: 0;
+      margin: 0;
+    }
+    
+    @page {
+      size: auto;
+      margin: 10mm;
+    }
+  }
+
+
+  
+  

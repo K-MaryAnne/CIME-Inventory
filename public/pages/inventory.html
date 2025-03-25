@@ -12,9 +12,55 @@
   <!-- Custom CSS -->
   <link rel="stylesheet" href="../css/main.css">
   <link rel="stylesheet" href="../css/dashboard.css">
+
+
+
+
+  <style>
+    /* Barcode and scanning styles */
+    .highlight-scan {
+      animation: highlight-flash 0.5s;
+    }
+    
+    @keyframes highlight-flash {
+      0% { background-color: #ffffff; border-color: #ced4da; }
+      30% { background-color: #d4edda; border-color: #00843d; }
+      100% { background-color: #ffffff; border-color: #ced4da; }
+    }
+    
+    .focus-highlight {
+      border-color: #00843d !important;
+      box-shadow: 0 0 0 0.25rem rgba(0, 132, 61, 0.25) !important;
+    }
+    
+    /* Barcode section styles */
+    #scanBarcodeSection, #generatedBarcodeSection {
+      transition: all 0.3s ease;
+    }
+    
+    #scannerPreview {
+      min-height: 150px;
+    }
+    
+    /* Barcode display */
+    #barcodeDisplay, #generatedBarcodeImage, #currentBarcodeImage {
+      display: inline-block;
+      background-color: white;
+      padding: 10px;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+  </style>
+
+
+
+
+
   <!-- Barcode Libraries -->
   <script src="https://unpkg.com/html5-qrcode@2.3.4/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+
 </head>
 <body>
   <!-- Navigation -->
@@ -235,8 +281,10 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
-          <form id="itemForm">
-            <input type="hidden" id="itemId">
+              <!-- Read-only view for viewing (not editing) items -->
+  <div id="itemReadOnlyView" style="display: none;"></div>
+  <form id="itemForm" style="display: block;">
+    <input type="hidden" id="itemId">
             
             <div class="row mb-3">
               <div class="col-md-6">
@@ -356,102 +404,140 @@
               </div>
             </div>
             
-            <div class="row mb-4" id="barcodeRow">
-                <div class="col-md-12">
-                  <div class="card">
-                    <div class="card-header bg-light">
-                      <h5 class="mb-0"><i class="fas fa-barcode me-2"></i>Barcode Information</h5>
-                    </div>
-                    <div class="card-body">
-                      <div class="mb-3">
-                        <label class="form-label">Barcode Type</label>
-                        <div class="d-flex">
-                          <div class="form-check me-4">
-                            <input class="form-check-input" type="radio" name="barcodeOption" id="scanExisting" value="existing" checked>
-                            <label class="form-check-label" for="scanExisting">
-                              Use existing manufacturer barcode
-                            </label>
+            <div class="card" id="barcodeRow">
+              <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-barcode me-2"></i>Barcode Information</h5>
+              </div>
+            
+              <div id="itemModalAlerts"></div>
+            
+              <div class="card-body">
+                <!-- Current barcode display for existing items -->
+                <div id="currentBarcodeDisplay" class="mb-4 d-none">
+                  <div class="row">
+                    <div class="col-md-12">
+                      <h6 class="mb-3">Current Barcode</h6>
+                      <div class="d-flex justify-content-center">
+                        <div class="text-center p-3 border rounded">
+                          <div id="currentBarcodeImage" class="mb-2">
+                            <!-- Barcode image will be displayed here -->
                           </div>
-                          <div class="form-check">
-                            <input class="form-check-input" type="radio" name="barcodeOption" id="generateNew" value="generate">
-                            <label class="form-check-label" for="generateNew">
-                              Generate new system barcode
-                            </label>
-                          </div>
+                          <div id="currentBarcodeValue" class="font-monospace"></div>
+                          <small id="currentBarcodeType" class="text-muted d-block mt-1"></small>
                         </div>
                       </div>
-
-
-                      <!-- Existing barcode section -->
-        <div id="scanBarcodeSection">
-            <div class="row mb-3">
-              <div class="col-md-8">
-                <label for="itemBarcode" class="form-label">Barcode Value</label>
-                <div class="input-group">
-                  <input type="text" class="form-control" id="itemBarcode" placeholder="Scan or type existing barcode">
-                  <button class="btn btn-outline-primary" type="button" id="scanBarcodeBtn">
-                    <i class="fas fa-camera me-1"></i> Scan
-                  </button>
-                </div>
-                <small class="form-text text-muted">Enter the barcode exactly as printed on the item</small>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label">Scanner</label>
-                <div id="scannerPreview" class="border rounded p-2 d-none text-center" style="min-height: 150px;">
-                  <!-- Camera preview will appear here -->
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Generated barcode section -->
-          <div id="generatedBarcodeSection" class="d-none">
-            <div class="row">
-              <div class="col-md-12">
-                <div class="alert alert-info">
-                  <i class="fas fa-info-circle me-2"></i> A unique system barcode will be generated automatically when the item is saved.
-                </div>
-              </div>
-            </div>
-            
-            <div id="previewGeneratedBarcode" class="text-center d-none">
-              <div class="d-inline-block border rounded p-3 bg-light">
-                <p class="mb-2"><small>Preview of generated barcode:</small></p>
-                <div id="generatedBarcodeImage" class="mb-2"></div>
-                <div id="generatedBarcodeValue" class="font-monospace"></div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Current barcode display for edit mode -->
-          <div id="currentBarcodeDisplay" class="d-none mt-3 pt-3 border-top">
-            <div class="row">
-              <div class="col-md-12">
-                <h6 class="mb-3">Current Barcode</h6>
-                <div class="d-flex justify-content-center">
-                  <div class="text-center p-3 border rounded">
-                    <div id="currentBarcodeImage" class="mb-2">
-                      <!-- Barcode image will be displayed here -->
                     </div>
-                    <div id="currentBarcodeValue" class="font-monospace"></div>
-                    <small id="currentBarcodeType" class="text-muted d-block mt-1"></small>
+                  </div>
+                </div>
+                
+                <!-- Change barcode section for edit mode with existing items -->
+                <div id="changeBarcodeSection" class="d-none mb-4">
+                  <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="changeBarcode" onchange="toggleChangeBarcode()">
+                    <label class="form-check-label" for="changeBarcode">
+                      <strong>Change this barcode</strong>
+                    </label>
+                  </div>
+                  
+                  <div id="newBarcodeForm" class="d-none ps-4 mb-3">
+                    <div class="form-check mb-3">
+                      <input class="form-check-input" type="radio" name="newBarcodeType" id="useExistingBarcode" checked>
+                      <label class="form-check-label" for="useExistingBarcode">
+                        Enter/scan a new barcode
+                      </label>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                      <input class="form-check-input" type="radio" name="newBarcodeType" id="generateNewBarcode">
+                      <label class="form-check-label" for="generateNewBarcode">
+                        Generate a new system barcode
+                      </label>
+                    </div>
+
+                    <div id="barcodeGenerationInfo" class="alert alert-info mt-3" style="display: none;">
+                      <i class="fas fa-info-circle me-2"></i> A unique system barcode will be generated automatically when the item is saved. This makes tracking easier.
+                    </div>
+                    
+                    <div id="newBarcodeInput" class="mt-3">
+                      <div class="input-group">
+                        <input type="text" class="form-control" id="newItemBarcode" placeholder="Scan or type new barcode">
+                        <button class="btn btn-outline-primary" type="button" id="newScanBarcodeBtn">
+                          <i class="fas fa-barcode me-1"></i> Focus Scanner
+                        </button>
+                      </div>
+                      <small class="form-text text-muted">Position your physical barcode scanner and click "Focus Scanner" before scanning</small>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Initial barcode options for new items -->
+                <div id="barcodeOptionsSection" class="mb-3">
+                  <div id="newBarcodeOptionsSection">
+                    <label class="form-label">Barcode Type</label>
+                    <div class="d-flex">
+                      <div class="form-check me-4">
+                        <input class="form-check-input" type="radio" name="barcodeOption" id="scanExisting" value="existing">
+                        <label class="form-check-label" for="scanExisting">
+                          Use existing manufacturer barcode
+                        </label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="radio" name="barcodeOption" id="generateNew" value="generate">
+                        <label class="form-check-label" for="generateNew">
+                          Generate new system barcode
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+            
+                  <!-- Existing barcode section -->
+                  <div id="scanBarcodeSection" class="mt-3">
+                    <div class="row">
+                      <div class="col-md-12">
+                        <p class="small text-muted">
+                          <i class="fas fa-info-circle me-1"></i> If this item already has a barcode, scan it or type it below:
+                        </p>
+                        <div class="input-group">
+                          <input type="text" class="form-control" id="itemBarcode" placeholder="Scan or type existing barcode">
+                          <button class="btn btn-outline-primary" type="button" id="scanBarcodeBtn">
+                            <i class="fas fa-barcode me-1"></i> Focus Scanner
+                          </button>
+                        </div>
+                        <small class="form-text text-muted">Position your physical barcode scanner and click "Focus Scanner" before scanning</small>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Generated barcode section -->
+                  <div id="generatedBarcodeSection" class="d-none mt-3">
+                    <div class="row">
+                      <div class="col-md-12">
+                        <div class="alert alert-info">
+                          <i class="fas fa-info-circle me-2"></i> A unique system barcode will be generated automatically when the item is saved. This makes tracking easier.
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div id="previewGeneratedBarcode" class="text-center d-none">
+                      <p class="small text-muted mb-2">Preview of what your generated barcode will look like:</p>
+                      <div class="d-inline-block border rounded p-3 bg-light">
+                        <div id="generatedBarcodeImage" class="mb-2"></div>
+                        <div id="generatedBarcodeValue" class="font-monospace small"></div>
+                      </div>
+                      <p class="small text-muted mt-2">The actual barcode will be generated when you save the item</p>
+                    </div>
                   </div>
                 </div>
               </div>
+              <div class="card-footer">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="printBarcodeBtn">
+                  <i class="fas fa-print me-1"></i> Print Barcode
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="printItemDetailsBtn">
+                  <i class="fas fa-print me-1"></i> Print Item Details
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-        <div class="card-footer">
-          <button type="button" class="btn btn-outline-primary btn-sm" id="printBarcodeBtn">
-            <i class="fas fa-print me-1"></i> Print Barcode
-          </button>
-          <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="printItemDetailsBtn">
-            <i class="fas fa-print me-1"></i> Print Item Details
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
 
 </form>
         </div>
@@ -562,6 +648,122 @@
       </div>
     </div>
   </div>
+
+
+
+
+  <script>
+    // This script helps debug and fix issues with modals and buttons
+    document.addEventListener('DOMContentLoaded', function() {
+  console.log('Running additional fixes script');
+  
+  // Fix for quick transaction buttons on the scanner page
+  if (window.location.pathname.includes('scanner.html')) {
+    const checkButtons = [
+      'checkInBtn',
+      'checkOutBtn',
+      'maintenanceBtn',
+      'restockBtn'
+    ];
+    
+    checkButtons.forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        console.log(`Found ${id} button`);
+        // Make sure the button is visible with proper styling
+        btn.style.cursor = 'pointer';
+        btn.style.pointerEvents = 'auto';
+        
+        // Add a click event that will definitely work
+        btn.onclick = function(e) {
+          console.log(`${id} clicked`);
+          // The main event handlers will be attached in scanner.js
+        };
+      } else {
+        console.error(`${id} button not found!`);
+      }
+    });
+  }
+  
+  // Fix for item modal views in inventory page
+  if (window.location.pathname.includes('inventory.html')) {
+    // Ensure modal views are set up properly
+    const itemFormView = document.getElementById('itemFormView');
+    const itemReadOnlyView = document.getElementById('itemReadOnlyView');
+    
+    if (itemFormView && itemReadOnlyView) {
+      console.log('Found item modal views');
+      // Make sure they're initialized with the right display values
+      itemFormView.style.display = 'block';
+      itemReadOnlyView.style.display = 'none';
+    }
+    
+    // Make sure action buttons work
+    document.querySelectorAll('.view-btn, .edit-btn').forEach(btn => {
+      console.log('Setting up button:', btn);
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const itemId = this.getAttribute('data-id');
+        if (itemId) {
+          console.log(`Button clicked for item ${itemId}`);
+          if (this.classList.contains('view-btn')) {
+            loadItemDetails(itemId, false);
+          } else if (this.classList.contains('edit-btn')) {
+            loadItemDetails(itemId, true);
+          }
+        }
+      });
+    });
+  }
+  
+  // Set up barcode functionality
+  // Set up event listeners for barcode radio buttons
+  const scanExisting = document.getElementById('scanExisting');
+  const generateNew = document.getElementById('generateNew');
+  if (scanExisting && generateNew) {
+    scanExisting.addEventListener('change', toggleBarcodeInputMethod);
+    generateNew.addEventListener('change', toggleBarcodeInputMethod);
+  }
+  
+  // Set up event listeners for change barcode options
+  const useExistingBarcode = document.getElementById('useExistingBarcode');
+  const generateNewBarcode = document.getElementById('generateNewBarcode');
+  if (useExistingBarcode && generateNewBarcode) {
+    useExistingBarcode.addEventListener('change', function() {
+      const newBarcodeInput = document.getElementById('newBarcodeInput');
+      if (newBarcodeInput) {
+        newBarcodeInput.style.display = this.checked ? 'block' : 'none';
+      }
+    });
+    generateNewBarcode.addEventListener('change', function() {
+      const newBarcodeInput = document.getElementById('newBarcodeInput');
+      if (newBarcodeInput) {
+        newBarcodeInput.style.display = this.checked ? 'none' : 'block';
+      }
+    });
+  }
+  
+  // Setup barcode scanning buttons
+  const scanBarcodeBtn = document.getElementById('scanBarcodeBtn');
+  if (scanBarcodeBtn) {
+    scanBarcodeBtn.addEventListener('click', function() {
+      const itemBarcode = document.getElementById('itemBarcode');
+      itemBarcode.focus();
+      itemBarcode.select();
+    });
+  }
+  
+  const newScanBarcodeBtn = document.getElementById('newScanBarcodeBtn');
+  if (newScanBarcodeBtn) {
+    newScanBarcodeBtn.addEventListener('click', function() {
+      const newItemBarcode = document.getElementById('newItemBarcode');
+      newItemBarcode.focus();
+      newItemBarcode.select();
+    });
+  }
+});
+  </script>
 
 
 
