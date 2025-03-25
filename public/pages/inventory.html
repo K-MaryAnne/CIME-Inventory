@@ -303,7 +303,7 @@
                   <option value="Other">Other</option>
                 </select>
               </div>
-              <div class="col-md-3">
+              <div class="col-md-3 form-group-status">
                 <label for="itemStatus" class="form-label">Status*</label>
                 <select class="form-select" id="itemStatus" required>
                   <option value="Available">Available</option>
@@ -352,11 +352,10 @@
                 <label for="itemUnitCost" class="form-label">Unit Cost (KES)*</label>
                 <input type="number" class="form-control" id="itemUnitCost" min="0" step="0.01" required>
               </div>
-              <div class="col-md-3">
+              <div class="col-md-3 form-group-reorder">
                 <label for="itemReorderLevel" class="form-label">Reorder Level*</label>
                 <input type="number" class="form-control" id="itemReorderLevel" min="0" required>
               </div>
-            </div>
             
             <div class="row mb-3">
               <div class="col-md-4">
@@ -387,15 +386,16 @@
                 <label for="itemPurchaseDate" class="form-label">Purchase Date</label>
                 <input type="date" class="form-control" id="itemPurchaseDate">
               </div>
-              <div class="col-md-4">
-                <label for="itemLastMaintenanceDate" class="form-label">Last Maintenance Date</label>
-                <input type="date" class="form-control" id="itemLastMaintenanceDate">
+              <div class="row mb-3 form-group-maintenance">
+                <div class="col-md-4">
+                  <label for="itemLastMaintenanceDate" class="form-label">Last Maintenance Date</label>
+                  <input type="date" class="form-control" id="itemLastMaintenanceDate">
+                </div>
+                <div class="col-md-4">
+                  <label for="itemNextMaintenanceDate" class="form-label">Next Maintenance Date</label>
+                  <input type="date" class="form-control" id="itemNextMaintenanceDate">
+                </div>
               </div>
-              <div class="col-md-4">
-                <label for="itemNextMaintenanceDate" class="form-label">Next Maintenance Date</label>
-                <input type="date" class="form-control" id="itemNextMaintenanceDate">
-              </div>
-            </div>
             
             <div class="row mb-3">
               <div class="col-md-12">

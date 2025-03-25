@@ -235,7 +235,170 @@ const createPagination = (currentPage, totalPages, onPageChange) => {
 
 
 
-// Add this function to main.js
+/**
+ * Enhanced modal closing function to solve ARIA and focus issues
+ * @param {HTMLElement} modalElement - The modal DOM element
+ */
+function enhancedModalClose(modalElement) {
+  if (!modalElement) return;
+  
+  try {
+    // 1. Find and blur any focused elements BEFORE closing the modal
+    const focusedElement = modalElement.querySelector(':focus');
+    if (focusedElement) {
+      focusedElement.blur();
+      // Move focus to the body
+      document.body.focus();
+    }
+    
+    // 2. Get the Bootstrap modal instance
+    const modalInstance = bootstrap.Modal.getInstance(modalElement);
+    if (!modalInstance) return;
+    
+    // 3. Remove event listeners to prevent Bootstrap from adding aria-hidden back
+    const modalCloseHandler = function(event) {
+      // Prevent default behavior that adds aria-hidden
+      event.preventDefault();
+      
+      // Remove aria-hidden attribute
+      modalElement.removeAttribute('aria-hidden');
+      
+      // Clean up modal-related classes and styles
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+      
+      // Make sure display style is set to none
+      modalElement.style.display = 'none';
+      
+      // Remove any leftover backdrops
+      document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+        backdrop.remove();
+      });
+    };
+    
+    // One-time event listener that will clean up after modal is hidden
+    modalElement.addEventListener('hidden.bs.modal', modalCloseHandler, { once: true });
+    
+    // 4. Close the modal
+    modalInstance.hide();
+    
+    // 5. For extra safety, manually clean up after animation finishes
+    setTimeout(() => {
+      // Double-check that aria-hidden is removed
+      modalElement.removeAttribute('aria-hidden');
+      
+      // Verify backdrop is removed
+      document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+        backdrop.remove();
+      });
+      
+      // Ensure body styles are reset
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+    }, 350); // Bootstrap modal transition is usually 300ms
+    
+  } catch (error) {
+    console.error('Error in enhancedModalClose:', error);
+    
+    // Fallback cleanup
+    modalElement.removeAttribute('aria-hidden');
+    modalElement.style.display = 'none';
+    document.body.classList.remove('modal-open');
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+      backdrop.remove();
+    });
+  }
+}
+
+
+
+/**
+ * Fix Bootstrap modal ARIA issues
+ */
+function patchBootstrapModals() {
+  // Only run if Bootstrap is available
+  if (typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+    console.warn('Bootstrap not loaded, cannot patch modals');
+    return;
+  }
+
+  // Create a MutationObserver to detect changes to aria-hidden
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.attributeName === 'aria-hidden' && 
+          mutation.target.classList.contains('modal') &&
+          mutation.target.getAttribute('aria-hidden') === 'true') {
+        
+        // Check if any element inside has focus
+        const focusedElement = mutation.target.querySelector(':focus');
+        if (focusedElement) {
+          // Clear focus to prevent ARIA conflicts
+          focusedElement.blur();
+          document.body.focus();
+          
+          // Remove the problematic aria-hidden attribute
+          setTimeout(() => {
+            mutation.target.removeAttribute('aria-hidden');
+          }, 0);
+        }
+      }
+    });
+  });
+
+  // Start observing all modals for aria-hidden changes
+  document.querySelectorAll('.modal').forEach(modal => {
+    observer.observe(modal, { attributes: true });
+  });
+
+  // Add observer to new modals that might be dynamically added
+  const bodyObserver = new MutationObserver((mutations) => {
+    mutations.forEach(mutation => {
+      if (mutation.addedNodes) {
+        mutation.addedNodes.forEach(node => {
+          if (node.classList && node.classList.contains('modal')) {
+            observer.observe(node, { attributes: true });
+          }
+        });
+      }
+    });
+  });
+
+  // Observe the body for new modals
+  bodyObserver.observe(document.body, { 
+    childList: true, 
+    subtree: true 
+  });
+
+  // Override the hide method of Bootstrap modals
+  const originalHide = bootstrap.Modal.prototype.hide;
+  bootstrap.Modal.prototype.hide = function() {
+    // Find the modal element
+    const modalElement = this._element;
+    
+    // Remove focus from elements inside the modal
+    const focusedElement = modalElement.querySelector(':focus');
+    if (focusedElement) {
+      focusedElement.blur();
+      document.body.focus();
+    }
+    
+    // Remove aria-hidden before hiding
+    modalElement.removeAttribute('aria-hidden');
+    
+    // Call the original method
+    originalHide.call(this);
+    
+    // Ensure cleanup happens after animation
+    setTimeout(() => {
+      modalElement.removeAttribute('aria-hidden');
+      modalElement.style.display = 'none';
+    }, 350);
+  };
+}
+
+
 function setupImprovedModalHandling() {
   // Fix for modal focus issues
   document.addEventListener('hidden.bs.modal', function(event) {
@@ -281,57 +444,16 @@ function setupImprovedModalHandling() {
 
 
 
-// Function to fix modal backdrop issues
-function setupModalBackdropFix() {
-    // Fix for modal backdrop not disappearing
-    document.addEventListener('hidden.bs.modal', function (event) {
-      // When any modal is hidden, remove all .modal-backdrop elements
-      const backdrops = document.querySelectorAll('.modal-backdrop');
-      backdrops.forEach(backdrop => {
-        backdrop.remove();
-      });
-      
-      // Also ensure body doesn't have the modal-open class
-      document.body.classList.remove('modal-open');
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
-    }, false);
-    
-    // Additional fix for cases where modals are forcibly closed
-    window.clearModalBackdrops = function() {
-      const backdrops = document.querySelectorAll('.modal-backdrop');
-      backdrops.forEach(backdrop => {
-        backdrop.remove();
-      });
-      document.body.classList.remove('modal-open');
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
-    };
-  }
 
-
-// Fix modal focus issues
-function fixModalFocusIssues() {
-    // Fix for modals with aria-hidden issues
-    document.addEventListener('hidden.bs.modal', function(event) {
-      // When any modal is hidden
-      setTimeout(() => {
-        // Reset focus to the body to avoid ARIA errors
-        document.body.focus();
-        // Remove any stray aria-hidden attributes
-        document.body.removeAttribute('aria-hidden');
-        document.documentElement.removeAttribute('aria-hidden');
-      }, 50);
-    });
-  }
 
   
   // Consolidated initialization when document is loaded
 document.addEventListener('DOMContentLoaded', function() {
   // Call all setup functions in one place
-  setupModalBackdropFix();
-  fixModalFocusIssues();
+  // setupModalBackdropFix();
+  // fixModalFocusIssues();
   setupImprovedModalHandling();
+  patchBootstrapModals();
   
-  console.log('All modal handling improvements initialized');
+  console.log('All enhanced modal handling improvements initialized');
 });

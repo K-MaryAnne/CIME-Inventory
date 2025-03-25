@@ -1580,6 +1580,13 @@ function openItemModal(item, isEdit = false) {
   try {
 
 
+
+
+     // Set category and update form fields accordingly
+  document.getElementById('itemCategory').value = item.category || '';
+  updateFormFieldsBasedOnCategory(item.category || '');
+
+
 // Reset barcode editing state whenever the modal opens
 const changeBarcode = document.getElementById('changeBarcode');
 if (changeBarcode) {
@@ -2268,9 +2275,14 @@ function saveItem() {
           // }
 
 
-          // Safely close modal 
-    const modal = document.getElementById('itemModal');
-    safeCloseModal(modal);
+    //       // Safely close modal 
+    // const modal = document.getElementById('itemModal');
+    // safeCloseModal(modal);
+
+    enhancedModalClose(document.getElementById('itemModal'));
+
+
+
           
           // Show success message
           showAlert(`${messagePrefix} successfully`, 'success');
@@ -2477,6 +2489,132 @@ function printInventory() {
   window.print();
 }
 
+
+
+function updateFormFieldsBasedOnCategory(category) {
+  // Get references to conditional fields
+  const statusGroup = document.querySelector('.form-group-status');
+  const maintenanceDatesGroup = document.querySelector('.form-group-maintenance');
+  const rentalFieldsGroup = document.querySelector('.form-group-rental');
+  const reorderGroup = document.querySelector('.form-group-reorder');
+  
+  // Default all fields to visible first
+  if (statusGroup) statusGroup.style.display = 'block';
+  if (maintenanceDatesGroup) maintenanceDatesGroup.style.display = 'block';
+  if (rentalFieldsGroup) rentalFieldsGroup.style.display = 'block';
+  if (reorderGroup) reorderGroup.style.display = 'block';
+  
+  // Update status options based on category
+  const statusSelect = document.getElementById('itemStatus');
+  
+  if (statusSelect) {
+    // Clear existing options first
+    statusSelect.innerHTML = '';
+    
+    // Add common option
+    const availableOption = document.createElement('option');
+    availableOption.value = 'Available';
+    availableOption.textContent = 'Available';
+    statusSelect.appendChild(availableOption);
+    
+    // Add category-specific options
+    switch(category) {
+      case 'Consumable':
+        // Consumables have simpler status options
+        const outOfStockOption = document.createElement('option');
+        outOfStockOption.value = 'Out of Stock';
+        outOfStockOption.textContent = 'Out of Stock';
+        statusSelect.appendChild(outOfStockOption);
+        
+        // Hide irrelevant fields for consumables
+        if (maintenanceDatesGroup) maintenanceDatesGroup.style.display = 'none';
+        break;
+        
+      case 'Task Trainer':
+      case 'Manikin':
+      case 'Electronic':
+      case 'Device':
+        // Equipment has all status options
+        const maintenanceOption = document.createElement('option');
+        maintenanceOption.value = 'Under Maintenance';
+        maintenanceOption.textContent = 'Under Maintenance';
+        statusSelect.appendChild(maintenanceOption);
+        
+        const rentedOption = document.createElement('option');
+        rentedOption.value = 'Rented';
+        rentedOption.textContent = 'Rented';
+        statusSelect.appendChild(rentedOption);
+        
+        const outOfStockEquipOption = document.createElement('option');
+        outOfStockEquipOption.value = 'Out of Stock';
+        outOfStockEquipOption.textContent = 'Out of Stock';
+        statusSelect.appendChild(outOfStockEquipOption);
+        break;
+        
+      case 'Other':
+      default:
+        // Add all options for "Other" category
+        const maintenanceDefaultOption = document.createElement('option');
+        maintenanceDefaultOption.value = 'Under Maintenance';
+        maintenanceDefaultOption.textContent = 'Under Maintenance';
+        statusSelect.appendChild(maintenanceDefaultOption);
+        
+        const rentedDefaultOption = document.createElement('option');
+        rentedDefaultOption.value = 'Rented';
+        rentedDefaultOption.textContent = 'Rented';
+        statusSelect.appendChild(rentedDefaultOption);
+        
+        const outOfStockDefaultOption = document.createElement('option');
+        outOfStockDefaultOption.value = 'Out of Stock';
+        outOfStockDefaultOption.textContent = 'Out of Stock';
+        statusSelect.appendChild(outOfStockDefaultOption);
+        break;
+    }
+    
+    // Set default status based on category
+    if (category === 'Consumable') {
+      statusSelect.value = 'Available';
+    } else {
+      statusSelect.value = 'Available';
+    }
+  }
+  
+  // Update unit field placeholder based on category
+  const unitField = document.getElementById('itemUnit');
+  if (unitField) {
+    switch(category) {
+      case 'Consumable':
+        unitField.value = 'piece';
+        unitField.placeholder = 'e.g., piece, box, pack, ml';
+        break;
+      case 'Task Trainer':
+      case 'Manikin':
+      case 'Electronic':
+      case 'Device':
+        unitField.value = 'unit';
+        unitField.placeholder = 'e.g., unit, set';
+        break;
+      default:
+        unitField.value = 'piece';
+        unitField.placeholder = 'e.g., piece, unit';
+        break;
+    }
+  }
+  
+  // Update default reorder level based on category
+  const reorderField = document.getElementById('itemReorderLevel');
+  if (reorderField) {
+    if (category === 'Consumable') {
+      reorderField.value = '10';
+    } else {
+      reorderField.value = '1';
+    }
+  }
+}
+
+
+
+
 // Setup event listeners
 function setupEventListeners() {
     // Logout button
@@ -2511,6 +2649,10 @@ function setupEventListeners() {
     document.getElementById('locationFilter').addEventListener('change', () => {
       currentPage = 1;
       loadInventoryItems();
+    });
+
+    document.getElementById('itemCategory').addEventListener('change', function() {
+      updateFormFieldsBasedOnCategory(this.value);
     });
     
 // Add new item button
@@ -2560,6 +2702,18 @@ if (addItemBtn) {
     
     // Toggle barcode sections based on selected option
     toggleBarcodeInputMethod();
+
+
+
+     // Set default category
+     const categorySelect = document.getElementById('itemCategory');
+     categorySelect.value = '';
+
+
+
+       // Initialize form fields based on empty category
+    updateFormFieldsBasedOnCategory('');
+
     
     // Set default values
     document.getElementById('itemStatus').value = 'Available';
