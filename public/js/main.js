@@ -399,6 +399,37 @@ function patchBootstrapModals() {
 }
 
 
+// HEREEEE!
+
+function generateScannerFriendlyBarcode() {
+  // Use Code-128 format which is highly reliable and widely supported
+  // Stick to numeric values for maximum compatibility
+  const prefix = '1000'; // Simple numeric prefix
+  const timestamp = Date.now().toString().substring(7); // Last 6 digits of timestamp
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  
+  // Combine to create a numeric barcode that's easier for scanners to read
+  return `${prefix}${timestamp}${random}`;
+}
+
+
+// Update the JsBarcode configuration
+function renderBarcode(canvas, barcodeValue) {
+  JsBarcode(canvas, barcodeValue, {
+    format: "CODE128",  // Industry standard format
+    lineColor: "#000",
+    width: 2,
+    height: 60,         // Taller bars for better scanning
+    displayValue: true, // Show the value below the barcode
+    fontSize: 14,       // Larger text
+    margin: 10,         // More whitespace around barcode
+    textMargin: 6       // Space between barcode and text
+  });
+}
+
+///TO HEEERRRE
+
+
 function setupImprovedModalHandling() {
   // Fix for modal focus issues
   document.addEventListener('hidden.bs.modal', function(event) {

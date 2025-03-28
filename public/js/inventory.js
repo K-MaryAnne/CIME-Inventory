@@ -922,7 +922,6 @@ async function findItemByBarcode(barcode) {
   }
   
 
-
   function printBarcode(item) {
     if (!item || !item.barcode) {
       showAlert('No barcode available to print', 'warning');
@@ -931,7 +930,7 @@ async function findItemByBarcode(barcode) {
     
     const barcode = item.barcode;
     const itemName = item.name;
-    const category = item.category;
+    const category = item.category || '';
     
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -948,58 +947,46 @@ async function findItemByBarcode(barcode) {
           body {
             font-family: Arial, sans-serif;
             text-align: center;
-            padding: 20px;
+            padding: 15mm;
+            margin: 0;
           }
           .barcode-container {
             border: 1px solid #ddd;
             display: inline-block;
-            padding: 15px;
-            margin-bottom: 20px;
-            width: 300px;
+            padding: 10mm;
+            width: 80mm;
+            background: white;
           }
           .item-name {
             font-weight: bold;
-            font-size: 14px;
-            margin-bottom: 5px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            font-size: 14pt;
+            margin-bottom: 5mm;
           }
           .item-category {
-            font-size: 12px;
+            font-size: 10pt;
             color: #666;
-            margin-bottom: 10px;
+            margin-bottom: 8mm;
+          }
+          .barcode-image {
+            margin: 10mm 0;
+            padding: 5mm;
+            background: white;
           }
           .barcode-value {
             font-family: monospace;
-            margin-top: 10px;
-            font-size: 12px;
-          }
-          .barcode-image {
-            margin: 10px 0;
+            font-size: 14pt;
+            font-weight: bold;
+            letter-spacing: 1pt;
+            margin-top: 5mm;
           }
           @media print {
-            @page {
-              size: 65mm 30mm; /* Label size */
-              margin: 0;
-            }
             body {
-              padding: 5mm;
-              margin: 0;
+              padding: 0;
             }
             .barcode-container {
               border: none;
-              padding: 0;
-              width: 55mm;
-            }
-            .item-name {
-              font-size: 10pt;
-            }
-            .item-category {
-              font-size: 8pt;
-            }
-            .barcode-value {
-              font-size: 8pt;
+              width: 100%;
+              padding: 5mm;
             }
           }
         </style>
@@ -1017,24 +1004,30 @@ async function findItemByBarcode(barcode) {
         <script>
           window.onload = function() {
             try {
-              // Generate barcode
+              // Use CODE128 format with specific settings for physical scanners
               JsBarcode("#barcodeCanvas", "${barcode}", {
                 format: "CODE128",
-                lineColor: "#000",
-                width: 2,
-                height: 50,
-                displayValue: false
+                lineColor: "#000000",
+                width: 3,           // Much wider lines
+                height: 100,        // Much taller barcode
+                displayValue: false,
+                margin: 20,         // Larger margins
+                background: "#FFFFFF" // Ensure white background
               });
               
-              // Print after a short delay to ensure barcode is rendered
+              // Print after ensuring barcode is rendered
               setTimeout(function() {
                 window.print();
                 window.setTimeout(function() {
                   window.close();
-                }, 750);
-              }, 200);
+                }, 1000);
+              }, 500);
             } catch (e) {
-              document.body.innerHTML += '<p style="color: red;">Error generating barcode: ' + e.message + '</p>';
+              document.body.innerHTML = '<div style="color:red; padding:20px;">' + 
+                '<h2>Error Generating Barcode</h2>' +
+                '<p>' + e.message + '</p>' +
+                '<p>Please try again or contact support.</p>' +
+                '</div>';
             }
           };
         </script>
@@ -1044,7 +1037,9 @@ async function findItemByBarcode(barcode) {
     
     printWindow.document.close();
   }
-  
+
+
+
   function printItemDetails(item) {
     if (!item) {
       showAlert('No item data available to print', 'warning');
@@ -1621,7 +1616,26 @@ if (newBarcodeForm) {
     // Fill form fields
     document.getElementById('itemId').value = item._id || '';
     document.getElementById('itemName').value = item.name || '';
-    document.getElementById('itemCategory').value = item.category || '';
+    // document.getElementById('itemCategory').value = item.category || '';
+
+    const categorySelect = document.getElementById('itemCategory');
+    const customCategoryGroup = document.getElementById('customCategoryGroup');
+    const customCategoryInput = document.getElementById('customCategory');
+    
+    // Check if the item's category matches any of our predefined options
+    const predefinedCategories = ['Task Trainer', 'Manikin', 'Consumable', 'Electronic', 'Other'];
+    
+    if (predefinedCategories.includes(item.category)) {
+      // It's a standard category
+      categorySelect.value = item.category;
+      if (customCategoryGroup) customCategoryGroup.style.display = 'none';
+    } else {
+      // It's a custom category
+      categorySelect.value = 'Other';
+      if (customCategoryGroup) customCategoryGroup.style.display = 'block';
+      if (customCategoryInput) customCategoryInput.value = item.category;
+    }
+
     document.getElementById('itemStatus').value = item.status || 'Available';
     document.getElementById('itemDescription').value = item.description || '';
     document.getElementById('itemSerialNumber').value = item.serialNumber || '';
@@ -1708,13 +1722,15 @@ if (newBarcodeForm) {
             
             JsBarcode(canvas, item.barcode, {
               format: "CODE128",
-              lineColor: "#000",
-              width: 2,
-              height: 50,
-              displayValue: false
-            });
-          }
-        } catch (error) {
+      lineColor: "#000000",
+      width: 2,
+      height: 60,
+      displayValue: false,
+      margin: 10,
+      background: "#FFFFFF"
+    });
+  }
+} catch (error) {
           console.error('Error generating barcode display:', error);
         }
       }
@@ -1786,6 +1802,63 @@ if (newBarcodeForm) {
     showAlert('Error loading item details. Please try again.', 'danger');
   }
 }
+
+
+// Update the category dropdown in the HTML
+// Replace your current <select> for category with this:
+function updateCategoryOptions() {
+  const categorySelect = document.getElementById('itemCategory');
+  
+  // Clear existing options
+  categorySelect.innerHTML = '';
+  
+  // Add default empty option
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'Select Category';
+  categorySelect.appendChild(defaultOption);
+  
+  // Define main categories
+  const categories = [
+    { value: 'Task Trainer', label: 'Task Trainer' },
+    { value: 'Manikin', label: 'Manikin' },
+    { value: 'Consumable', label: 'Consumable' },
+    { value: 'Electronic', label: 'Electronic Device' }, // Merged category
+    { value: 'Other', label: 'Other (Custom)' }
+  ];
+  
+  // Add options to select
+  categories.forEach(category => {
+    const option = document.createElement('option');
+    option.value = category.value;
+    option.textContent = category.label;
+    categorySelect.appendChild(option);
+  });
+}
+
+
+document.addEventListener('DOMContentLoaded', function() {
+  updateCategoryOptions();
+  
+  // Show/hide custom category field based on selection
+  const categorySelect = document.getElementById('itemCategory');
+  const customCategoryGroup = document.getElementById('customCategoryGroup');
+  
+  if (categorySelect && customCategoryGroup) {
+    categorySelect.addEventListener('change', function() {
+      if (this.value === 'Other') {
+        customCategoryGroup.style.display = 'block';
+        document.getElementById('customCategory').setAttribute('required', 'required');
+      } else {
+        customCategoryGroup.style.display = 'none';
+        document.getElementById('customCategory').removeAttribute('required');
+      }
+      
+      // Update other form fields based on category
+      updateFormFieldsBasedOnCategory(this.value);
+    });
+  }
+});
   
   // Helper function to safely set element values
   function setElementValue(elementId, value) {
@@ -2080,6 +2153,20 @@ function saveItem() {
     const itemId = document.getElementById('itemId').value;
     const name = document.getElementById('itemName').value;
     const category = document.getElementById('itemCategory').value;
+    let finalCategory = category;
+    let categoryType = category;
+
+    // Handle custom category if "Other" is selected
+    if (category === 'Other') {
+      const customCategory = document.getElementById('customCategory').value;
+      if (customCategory && customCategory.trim() !== '') {
+        finalCategory = customCategory.trim();
+        categoryType = 'Custom';
+      }
+    } else {
+      // For standard categories, use the category value as categoryType
+      categoryType = category;
+    }
     const status = document.getElementById('itemStatus').value;
     const description = document.getElementById('itemDescription').value;
     const serialNumber = document.getElementById('itemSerialNumber').value;
@@ -2181,7 +2268,8 @@ function saveItem() {
     // Prepare item data
     const itemData = {
       name,
-      category,
+      category: finalCategory,
+      categoryType: categoryType,
       status,
       description,
       serialNumber,
@@ -2252,45 +2340,20 @@ function saveItem() {
         return response.json().then(item => {
           console.log('Item saved successfully:', item);
           
-          // // Close modal properly
-          // const modal = document.getElementById('itemModal');
-          // if (modal) {
-          //   const modalInstance = bootstrap.Modal.getInstance(modal);
-          //   if (modalInstance) {
-          //     modalInstance.hide();
-              
-          //     // Fix ARIA issues after modal closes
-          //     setTimeout(() => {
-          //       document.body.classList.remove('modal-open');
-          //       document.body.style.overflow = '';
-          //       document.body.style.paddingRight = '';
-                
-          //       const modalBackdrops = document.querySelectorAll('.modal-backdrop');
-          //       modalBackdrops.forEach(backdrop => backdrop.remove());
-                
-          //       modal.removeAttribute('aria-hidden');
-          //       modal.style.display = 'none';
-          //     }, 300);
-          //   }
-          // }
-
-
-    //       // Safely close modal 
-    // const modal = document.getElementById('itemModal');
-    // safeCloseModal(modal);
-
-    enhancedModalClose(document.getElementById('itemModal'));
-
-
-
+          // Close modal
+          enhancedModalClose(document.getElementById('itemModal'));
           
           // Show success message
           showAlert(`${messagePrefix} successfully`, 'success');
           
-          // If a barcode was generated, ask if they want to print it
-          if ((!itemId && item.barcodeType === 'generate') || 
-              (itemId && barcodeType === 'generate' && changeBarcode?.checked)) {
-            if (confirm('A new barcode has been generated. Would you like to print it now?')) {
+          // Check if a barcode was generated or changed
+          const hadNewBarcodeGenerated = 
+            (!itemId && item.barcodeType === 'generate') || 
+            (itemId && barcodeType === 'generate' && changeBarcode?.checked && 
+             item.barcode !== document.getElementById('currentBarcodeValue')?.textContent);
+          
+          if (hadNewBarcodeGenerated) {
+            if (confirm(`A new barcode (${item.barcode}) has been generated. Would you like to print it now?`)) {
               printBarcode(item);
             }
           }
@@ -2614,6 +2677,182 @@ function updateFormFieldsBasedOnCategory(category) {
 
 
 
+function testBarcodeScanning() {
+  // Create a modal for testing different barcode formats
+  const modal = document.createElement('div');
+  modal.className = 'modal fade';
+  modal.id = 'barcodeTestModal';
+  modal.innerHTML = `
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Barcode Scanner Test</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            Print this page and test which barcode format works best with your scanner.
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-4">
+              <div class="card">
+                <div class="card-header">CODE128 (Default)</div>
+                <div class="card-body text-center">
+                  <canvas id="barcode1"></canvas>
+                  <div class="mt-2 font-monospace">1000123456789</div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+              <div class="card">
+                <div class="card-header">CODE39</div>
+                <div class="card-body text-center">
+                  <canvas id="barcode2"></canvas>
+                  <div class="mt-2 font-monospace">1000123456789</div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+              <div class="card">
+                <div class="card-header">EAN-13</div>
+                <div class="card-body text-center">
+                  <canvas id="barcode3"></canvas>
+                  <div class="mt-2 font-monospace">6901234567892</div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+              <div class="card">
+                <div class="card-header">CODE128 (No Letters)</div>
+                <div class="card-body text-center">
+                  <canvas id="barcode4"></canvas>
+                  <div class="mt-2 font-monospace">10001234567890</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="mt-3">
+            <div class="input-group">
+              <input type="text" id="scannedBarcode" class="form-control" placeholder="Scan a barcode...">
+              <button class="btn btn-primary" type="button" id="clearScannedBarcode">Clear</button>
+            </div>
+            <div class="form-text">Scan any barcode to test if it's recognized correctly.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" id="printTestBarcodes">Print Test Sheet</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Show the modal
+  const modalInstance = new bootstrap.Modal(document.getElementById('barcodeTestModal'));
+  modalInstance.show();
+  
+  // Render the test barcodes
+  JsBarcode("#barcode1", "1000123456789", { format: "CODE128", displayValue: false });
+  JsBarcode("#barcode2", "1000123456789", { format: "CODE39", displayValue: false });
+  try {
+    JsBarcode("#barcode3", "6901234567892", { format: "EAN13", displayValue: false });
+  } catch (e) {
+    document.getElementById("barcode3").parentNode.innerHTML = '<div class="alert alert-warning">EAN-13 requires valid check digit</div>';
+  }
+  JsBarcode("#barcode4", "10001234567890", { format: "CODE128", displayValue: false });
+  
+  // Set up event listeners
+  document.getElementById('clearScannedBarcode').addEventListener('click', function() {
+    document.getElementById('scannedBarcode').value = '';
+    document.getElementById('scannedBarcode').focus();
+  });
+  
+  document.getElementById('printTestBarcodes').addEventListener('click', function() {
+    const printWindow = window.open('', '_blank');
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Barcode Test Sheet</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          .barcode-row { margin-bottom: 20px; display: flex; flex-wrap: wrap; }
+          .barcode-cell { border: 1px solid #ddd; margin: 10px; padding: 15px; text-align: center; width: 300px; }
+          .barcode-title { font-weight: bold; margin-bottom: 10px; }
+          .barcode-value { font-family: monospace; margin-top: 10px; }
+        </style>
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+      </head>
+      <body>
+        <h1>Barcode Scanner Test Sheet</h1>
+        <p>Scan these barcodes to determine which format works best with your scanner.</p>
+        
+        <div class="barcode-row">
+          <div class="barcode-cell">
+            <div class="barcode-title">CODE128 (Default)</div>
+            <canvas id="print-barcode1"></canvas>
+            <div class="barcode-value">1000123456789</div>
+          </div>
+          
+          <div class="barcode-cell">
+            <div class="barcode-title">CODE39</div>
+            <canvas id="print-barcode2"></canvas>
+            <div class="barcode-value">1000123456789</div>
+          </div>
+        </div>
+        
+        <div class="barcode-row">
+          <div class="barcode-cell">
+            <div class="barcode-title">EAN-13</div>
+            <canvas id="print-barcode3"></canvas>
+            <div class="barcode-value">6901234567892</div>
+          </div>
+          
+          <div class="barcode-cell">
+            <div class="barcode-title">CODE128 (Numeric Only)</div>
+            <canvas id="print-barcode4"></canvas>
+            <div class="barcode-value">10001234567890</div>
+          </div>
+        </div>
+        
+        <script>
+          window.onload = function() {
+            JsBarcode("#print-barcode1", "1000123456789", { format: "CODE128" });
+            JsBarcode("#print-barcode2", "1000123456789", { format: "CODE39" });
+            try {
+              JsBarcode("#print-barcode3", "6901234567892", { format: "EAN13" });
+            } catch(e) {
+              document.getElementById("print-barcode3").parentNode.innerHTML += '<div>Error: Invalid check digit</div>';
+            }
+            JsBarcode("#print-barcode4", "10001234567890", { format: "CODE128" });
+            
+            setTimeout(function() { window.print(); }, 500);
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+  });
+  
+  // Focus the input field for scanning
+  setTimeout(() => {
+    document.getElementById('scannedBarcode').focus();
+  }, 500);
+}
+
+
+
 
 // Setup event listeners
 function setupEventListeners() {
@@ -2778,62 +3017,32 @@ if (addItemBtn) {
   document.getElementById('printBtn').addEventListener('click', printInventory);
   
   // Print barcode button
-  document.getElementById('printBarcodeBtn').addEventListener('click', () => {
-    const barcodeImage = document.getElementById('barcodeImage').innerHTML;
-    const barcodeValue = document.getElementById('barcodeValue').textContent;
-    const itemName = document.getElementById('itemName').value;
-    
-    // Create a new window
-    const printWindow = window.open('', '_blank');
-    
-    // Write barcode content
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Barcode - ${itemName}</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 20px;
-          }
-          .barcode-container {
-            border: 1px solid #ddd;
-            display: inline-block;
-            padding: 15px;
-            margin-bottom: 20px;
-          }
-          .item-name {
-            font-weight: bold;
-            margin-bottom: 10px;
-          }
-          .barcode-value {
-            font-family: monospace;
-            margin-top: 10px;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="barcode-container">
-          <div class="item-name">${itemName}</div>
-          ${barcodeImage}
-          <div class="barcode-value">${barcodeValue}</div>
-        </div>
-        <script>
-          window.onload = function() {
-            window.print();
-            window.setTimeout(function() {
-              window.close();
-            }, 500);
-          };
-        </script>
-      </body>
-      </html>
-    `);
-    
-    printWindow.document.close();
-  });
+document.getElementById('printBarcodeBtn').addEventListener('click', () => {
+  // Get the item ID
+  const itemId = document.getElementById('itemId').value;
+  
+  // If we have an item ID, fetch the latest data and print
+  if (itemId) {
+    fetchWithAuth(`${API_URL}/items/${itemId}`)
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        } else {
+          throw new Error('Failed to fetch item data');
+        }
+      })
+      .then(item => {
+        printBarcode(item);
+      })
+      .catch(error => {
+        console.error('Error fetching item for printing:', error);
+        showAlert('Error preparing barcode for printing', 'danger');
+      });
+  } else {
+    // For new items that haven't been saved yet
+    showAlert('Please save the item first before printing the barcode', 'warning');
+  }
+});
   
   // Select all checkbox
   document.getElementById('selectAll').addEventListener('change', (e) => {
@@ -2842,4 +3051,19 @@ if (addItemBtn) {
       checkbox.checked = e.target.checked;
     });
   });
+
+// Add a button to the inventory page to test barcodes
+const testBarcodesBtn = document.createElement('button');
+testBarcodesBtn.className = 'btn btn-sm btn-outline-secondary ms-2';
+testBarcodesBtn.innerHTML = '<i class="fas fa-vial me-1"></i> Test Barcodes';
+testBarcodesBtn.addEventListener('click', testBarcodeScanning);
+
+// Insert the button in the toolbar
+const btnToolbar = document.querySelector('.btn-toolbar');
+if (btnToolbar) {
+  btnToolbar.appendChild(testBarcodesBtn);
+}
+
+
+
 }

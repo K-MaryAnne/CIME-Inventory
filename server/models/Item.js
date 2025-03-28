@@ -6,10 +6,19 @@ const ItemSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // category: {
+  //   type: String,
+  //   enum: ['Task Trainer', 'Manikin', 'Consumable', 'Electronic', 'Device', 'Other'],
+  //   required: true
+  // },
   category: {
     type: String,
-    enum: ['Task Trainer', 'Manikin', 'Consumable', 'Electronic', 'Device', 'Other'],
     required: true
+  },
+  categoryType: {
+    type: String,
+    enum: ['Task Trainer', 'Manikin', 'Consumable', 'Electronic', 'Device', 'Custom'],
+    default: 'Custom' 
   },
   description: {
     type: String
