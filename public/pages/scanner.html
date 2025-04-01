@@ -509,67 +509,115 @@
 
 
 
-  <div class="modal fade" id="quickTransactionModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="quickTransactionTitle">Quick Transaction</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <!-- Alert container for this specific modal -->
-          <div id="quickTransactionAlerts"></div>
+<!-- Updated Quick Transaction Modal with additional fields -->
+<div class="modal fade" id="quickTransactionModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="quickTransactionTitle">Quick Transaction</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <!-- Alert container for this specific modal -->
+        <div id="quickTransactionAlerts"></div>
+        
+        <form id="quickTransactionForm">
+          <input type="hidden" id="quickTransactionItemId">
+          <input type="hidden" id="quickTransactionType">
           
-          <form id="quickTransactionForm">
-            <input type="hidden" id="quickTransactionItemId">
-            <input type="hidden" id="quickTransactionType">
-            
-            <div class="mb-3">
-              <label for="quickTransactionItem" class="form-label">Item</label>
-              <input type="text" class="form-control" id="quickTransactionItem" readonly>
+          <div class="mb-3">
+            <label for="quickTransactionItem" class="form-label">Item</label>
+            <input type="text" class="form-control" id="quickTransactionItem" readonly>
+          </div>
+          
+          <div class="mb-3">
+            <label id="quickTransactionTypeLabel" class="form-label">Transaction Type</label>
+            <div>
+              <span id="quickTransactionTypeBadge" class="badge bg-success mb-2">Check-in</span>
             </div>
-            
-            <div class="mb-3">
-              <label id="quickTransactionTypeLabel" class="form-label">Transaction Type</label>
-              <div>
-                <span id="quickTransactionTypeBadge" class="badge bg-success mb-2">Check-in</span>
+          </div>
+          
+          <div class="mb-3">
+            <label for="quickTransactionQuantity" class="form-label">Quantity*</label>
+            <input type="number" class="form-control" id="quickTransactionQuantity" min="1" value="1" required>
+          </div>
+          
+          <!-- From Location -->
+          <div class="mb-3" id="quickFromLocationGroup" style="display: none;">
+            <label for="quickFromLocation" class="form-label">From Location*</label>
+            <select class="form-select" id="quickFromLocation">
+              <option value="">Select Location</option>
+              <!-- Will be populated from API -->
+            </select>
+          </div>
+          
+          <!-- To Location -->
+          <div class="mb-3" id="quickToLocationGroup" style="display: none;">
+            <label for="quickToLocation" class="form-label">To Location*</label>
+            <select class="form-select" id="quickToLocation">
+              <option value="">Select Location</option>
+              <!-- Will be populated from API -->
+            </select>
+          </div>
+          
+          <!-- Session details -->
+          <div class="mb-3" id="quickSessionGroup" style="display: none;">
+            <fieldset class="border rounded p-3">
+              <legend class="w-auto float-none px-2 fs-6">Session Details</legend>
+              <div class="mb-3">
+                <label for="quickSessionName" class="form-label">Session Name</label>
+                <input type="text" class="form-control" id="quickSessionName" placeholder="e.g., Clinical Training 101">
               </div>
-            </div>
-            
-            <div class="mb-3">
-              <label for="quickTransactionQuantity" class="form-label">Quantity*</label>
-              <input type="number" class="form-control" id="quickTransactionQuantity" min="1" value="1" required>
-            </div>
-            
-            <div class="mb-3" id="quickFromLocationGroup" style="display: none;">
-              <label for="quickFromLocation" class="form-label">From Location*</label>
-              <select class="form-select" id="quickFromLocation" required>
-                <option value="">Select Location</option>
-                <!-- Will be populated from API -->
-              </select>
-            </div>
-            
-            <div class="mb-3" id="quickToLocationGroup" style="display: none;">
-              <label for="quickToLocation" class="form-label">To Location*</label>
-              <select class="form-select" id="quickToLocation" required>
-                <option value="">Select Location</option>
-                <!-- Will be populated from API -->
-              </select>
-            </div>
-            
-            <div class="mb-3">
-              <label for="quickTransactionNotes" class="form-label">Notes</label>
-              <textarea class="form-control" id="quickTransactionNotes" rows="2"></textarea>
-            </div>
-          </form>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-primary" id="saveQuickTransactionBtn">Complete Transaction</button>
-        </div>
+              <div class="mb-3">
+                <label for="quickSessionLocation" class="form-label">Session Location</label>
+                <input type="text" class="form-control" id="quickSessionLocation" placeholder="e.g., Training Room 2">
+              </div>
+            </fieldset>
+          </div>
+          
+          <!-- Rental details -->
+          <div class="mb-3" id="quickRentalGroup" style="display: none;">
+            <fieldset class="border rounded p-3">
+              <legend class="w-auto float-none px-2 fs-6">Rental Details</legend>
+              <div class="mb-3">
+                <label for="quickRentedTo" class="form-label">Rented To*</label>
+                <input type="text" class="form-control" id="quickRentedTo" placeholder="Person or organization name">
+              </div>
+              <div class="mb-3">
+                <label for="quickExpectedReturnDate" class="form-label">Expected Return Date</label>
+                <input type="date" class="form-control" id="quickExpectedReturnDate">
+              </div>
+            </fieldset>
+          </div>
+          
+          <!-- Maintenance details -->
+          <div class="mb-3" id="quickMaintenanceGroup" style="display: none;">
+            <fieldset class="border rounded p-3">
+              <legend class="w-auto float-none px-2 fs-6">Maintenance Details</legend>
+              <div class="mb-3">
+                <label for="quickMaintenanceProvider" class="form-label">Maintenance Provider</label>
+                <input type="text" class="form-control" id="quickMaintenanceProvider" placeholder="Provider or technician name">
+              </div>
+              <div class="mb-3">
+                <label for="quickExpectedEndDate" class="form-label">Expected Completion Date</label>
+                <input type="date" class="form-control" id="quickExpectedEndDate">
+              </div>
+            </fieldset>
+          </div>
+          
+          <div class="mb-3">
+            <label for="quickTransactionNotes" class="form-label">Notes</label>
+            <textarea class="form-control" id="quickTransactionNotes" rows="2"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="saveQuickTransactionBtn">Complete Transaction</button>
       </div>
     </div>
   </div>
+</div>
 
 
   <script>

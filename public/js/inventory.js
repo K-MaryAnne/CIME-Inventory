@@ -11,7 +11,7 @@ let suppliers = [];
 let activeScanner = null;
 let activeScannerElementId = null;
 let activeScannerTargetId = null;
-
+let transactionItemData = null;
 let generatedBarcode = null;
 
 
@@ -39,18 +39,7 @@ document.addEventListener('click', function(e) {
     }
   });
   
-  // Handle transaction button clicks
-  document.addEventListener('click', function(e) {
-    if (e.target.matches('.transaction-btn') || e.target.closest('.transaction-btn')) {
-      const button = e.target.matches('.transaction-btn') ? e.target : e.target.closest('.transaction-btn');
-      const itemId = button.dataset.id;
-      const itemName = button.dataset.name;
-      
-      if (itemId && itemName) {
-        openTransactionModal(itemId, itemName);
-      }
-    }
-  });
+
 
 document.addEventListener('DOMContentLoaded', () => {
   // Check if user is logged in
@@ -61,6 +50,11 @@ document.addEventListener('DOMContentLoaded', () => {
     window.location.href = '../index.html';
     return;
   }
+
+    addModalFixStyles();
+    // setupTransactionButtons();
+    // fixTransactionModal();
+    setupEnhancedTransactions();
   
   // Setup event listeners
   setupEventListeners();
@@ -72,6 +66,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Fix modal accessibility issues
   fixModalAccessibilityIssues();
+
+    
+  // Fix transaction modal issues
+  // fixTransactionModal();
   
   // Make sure Save Item button has event listener attached
   const saveItemBtn = document.getElementById('saveItemBtn');
@@ -148,7 +146,24 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }, true);
   }
+
 });
+
+
+// Add CSS fix for modal z-index issues
+const modalFixStyle = document.createElement('style');
+modalFixStyle.textContent = `
+  .modal-backdrop {
+    z-index: 1040 !important;
+  }
+  .modal {
+    z-index: 1050 !important;
+  }
+  .modal-dialog {
+    z-index: 1060 !important;
+  }
+`;
+document.head.appendChild(modalFixStyle);
 
 
 async function checkServerConnection() {
@@ -291,6 +306,10 @@ async function loadLowStockItems() {
     showAlert('Failed to connect to server. Please try again.', 'danger');
   }
 }
+
+
+
+
 
 
 
@@ -1173,10 +1192,10 @@ async function findItemByBarcode(barcode) {
             <div class="detail-label">Status:</div>
             <div class="detail-value">${item.status}</div>
           </div>
-          <div class="detail-row">
-            <div class="detail-label">Serial Number:</div>
-            <div class="detail-value">${item.serialNumber || 'N/A'}</div>
-          </div>
+         <div class="detail-row">
+  <div class="detail-label">AKU No.:</div>
+  <div class="detail-value">${item.akuNo || 'N/A'}</div>
+</div>
           <div class="detail-row">
             <div class="detail-label">Manufacturer:</div>
             <div class="detail-value">${item.manufacturer || 'N/A'}</div>
@@ -1297,6 +1316,22 @@ function updateInventoryTable(items) {
   items.forEach(item => {
     const location = getFormattedLocation(item);
     
+    // Get available quantity
+    const availableQuantity = item.availableQuantity !== undefined ? 
+      item.availableQuantity : item.quantity;
+    
+    // Determine an enhanced status display
+    let statusDisplay = item.status;
+    let statusClass = getStatusBadgeClass(item.status);
+    
+    // For partially available items, show how many are available
+    if (item.status === 'Partially Available' && item.category !== 'Consumable') {
+      statusDisplay = `${availableQuantity}/${item.quantity} Available`;
+    }
+    
+    // For low stock items, add a visual indicator
+    const isLowStock = item.quantity <= item.reorderLevel;
+    
     html += `
       <tr data-id="${item._id}">
         <td>
@@ -1308,16 +1343,21 @@ function updateInventoryTable(items) {
           <div class="d-flex align-items-center">
             <div>
               <h6 class="mb-0">${item.name}</h6>
-              <small class="text-muted">${item.serialNumber || 'No S/N'}</small>
+              <small class="text-muted">${item.akuNo || 'No S/N'}</small>
             </div>
           </div>
         </td>
         <td>${item.category}</td>
         <td>
-          <span class="${item.quantity <= item.reorderLevel ? 'text-danger fw-bold' : ''}">${item.quantity} ${item.unit}</span>
+          <div>
+            <span class="${isLowStock ? 'text-danger fw-bold' : ''}">${item.quantity} ${item.unit}</span>
+            ${item.category !== 'Consumable' && availableQuantity !== item.quantity ? 
+              `<br><small class="text-muted">(${availableQuantity} available)</small>` : ''}
+            ${isLowStock ? '<span class="badge bg-danger ms-1">Low</span>' : ''}
+          </div>
         </td>
         <td>
-          <span class="${getStatusBadgeClass(item.status)}">${item.status}</span>
+          <span class="${statusClass}">${statusDisplay}</span>
         </td>
         <td>${location}</td>
         <td>
@@ -1343,6 +1383,10 @@ function updateInventoryTable(items) {
   tableBody.innerHTML = html;
   
   // Add event listeners to action buttons
+  setupActionButtons();
+}
+
+function setupActionButtons() {
   document.querySelectorAll('.view-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       loadItemDetails(btn.dataset.id);
@@ -1356,8 +1400,16 @@ function updateInventoryTable(items) {
   });
   
   document.querySelectorAll('.transaction-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      openTransactionModal(btn.dataset.id, btn.dataset.name);
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const itemId = btn.dataset.id;
+      const itemName = btn.dataset.name;
+      
+      if (itemId && itemName) {
+        // openTransactionModal(itemId, itemName);
+        fetchItemForTransaction(itemId); 
+      }
     });
   });
   
@@ -1392,15 +1444,42 @@ function updatePagination() {
 // Load locations and suppliers for the form
 async function loadLocationsAndSuppliers() {
   try {
-    // Load locations hierarchy
-    const locationsResponse = await fetchWithAuth(`${API_URL}/locations/hierarchy`);
-    
-    if (locationsResponse && locationsResponse.ok) {
-      locationHierarchy = await locationsResponse.json();
-      
-      // Populate location dropdowns
-      populateLocationDropdowns();
-    }
+   // Load locations hierarchy
+   fetchWithAuth(`${API_URL}/locations/hierarchy`)
+   .then(response => {
+     if (response && response.ok) {
+       return response.json();
+     }
+     return [];
+   })
+   .then(data => {
+     locationHierarchy = data;
+     
+     // Populate location filter dropdown
+     const locationFilter = document.getElementById('locationFilter');
+     locationFilter.innerHTML = '<option value="">All Locations</option>';
+     
+     locationHierarchy.forEach(room => {
+       locationFilter.innerHTML += `<option value="${room._id}">${room.name}</option>`;
+     });
+     
+     // Populate room dropdown
+     const roomSelect = document.getElementById('itemRoom');
+     roomSelect.innerHTML = '<option value="">Select Room</option>';
+     
+     locationHierarchy.forEach(room => {
+       roomSelect.innerHTML += `<option value="${room._id}">${room.name}</option>`;
+     });
+     
+     // Add event listener to room select for populating racks
+     roomSelect.addEventListener('change', () => {
+       populateRackDropdown(roomSelect.value);
+       
+       // Clear shelf dropdown when room changes
+       document.getElementById('itemShelf').innerHTML = '<option value="">Select Shelf</option>';
+       document.getElementById('itemShelf').disabled = true;
+     });
+   });
     
     // Load suppliers
     const suppliersResponse = await fetchWithAuth(`${API_URL}/suppliers`);
@@ -1475,7 +1554,8 @@ function populateRackDropdown(roomId) {
     rackSelect.disabled = false;
     
     room.racks.forEach(rack => {
-      rackSelect.innerHTML += `<option value="${rack._id}">${rack.name}</option>`;
+      // Include room name in the rack option text for clarity
+      rackSelect.innerHTML += `<option value="${rack._id}">${rack.name} (in ${room.name})</option>`;
     });
     
     // Add event listener to rack select for populating shelves
@@ -1513,7 +1593,8 @@ function populateShelfDropdown(roomId, rackId) {
     shelfSelect.disabled = false;
     
     rack.shelves.forEach(shelf => {
-      shelfSelect.innerHTML += `<option value="${shelf._id}">${shelf.name}</option>`;
+      // Include room and rack names in the shelf option for clarity
+      shelfSelect.innerHTML += `<option value="${shelf._id}">${shelf.name} (in ${rack.name}, ${room.name})</option>`;
     });
   } else {
     shelfSelect.disabled = true;
@@ -1638,7 +1719,7 @@ if (newBarcodeForm) {
 
     document.getElementById('itemStatus').value = item.status || 'Available';
     document.getElementById('itemDescription').value = item.description || '';
-    document.getElementById('itemSerialNumber').value = item.serialNumber || '';
+    document.getElementById('itemAkuNo').value = item.akuNo || '';
     document.getElementById('itemManufacturer').value = item.manufacturer || '';
     document.getElementById('itemSupplier').value = item.supplier ? item.supplier._id : '';
     document.getElementById('itemQuantity').value = item.quantity || 1;
@@ -1650,16 +1731,23 @@ if (newBarcodeForm) {
     if (item.location) {
       if (item.location.room) {
         document.getElementById('itemRoom').value = item.location.room._id || '';
+        // Call populateRackDropdown but wait for it to finish before setting rack value
         populateRackDropdown(item.location.room._id);
-      }
-      
-      if (item.location.rack) {
-        document.getElementById('itemRack').value = item.location.rack._id || '';
-        populateShelfDropdown(item.location.room._id, item.location.rack._id);
-      }
-      
-      if (item.location.shelf) {
-        document.getElementById('itemShelf').value = item.location.shelf._id || '';
+        
+        // We need to wait a moment for the rack dropdown to be populated
+        setTimeout(() => {
+          if (item.location.rack) {
+            document.getElementById('itemRack').value = item.location.rack._id || '';
+            populateShelfDropdown(item.location.room._id, item.location.rack._id);
+            
+            // Wait for shelf dropdown to be populated
+            setTimeout(() => {
+              if (item.location.shelf) {
+                document.getElementById('itemShelf').value = item.location.shelf._id || '';
+              }
+            }, 100);
+          }
+        }, 100);
       }
     }
     
@@ -1917,33 +2005,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 
-  // function toggleChangeBarcode() {
-  //   const changeBarcodeCheckbox = document.getElementById('changeBarcode');
-  //   const scanBarcodeSection = document.getElementById('scanBarcodeSection');
-  //   const generatedBarcodeSection = document.getElementById('generatedBarcodeSection');
-  //   const barcodeTypeOptions = document.getElementById('barcodeTypeOptions');
-    
-  //   if (changeBarcodeCheckbox.checked) {
-  //     // Show barcode type options
-  //     if (barcodeTypeOptions) barcodeTypeOptions.classList.remove('d-none');
-      
-  //     // Check which option is selected and show appropriate section
-  //     const useExisting = document.getElementById('changeToBarcodeExisting');
-  //     if (useExisting && useExisting.checked) {
-  //       scanBarcodeSection.classList.remove('d-none');
-  //       generatedBarcodeSection.classList.add('d-none');
-  //     } else {
-  //       scanBarcodeSection.classList.add('d-none');
-  //       generatedBarcodeSection.classList.remove('d-none');
-  //       previewGeneratedBarcode();
-  //     }
-  //   } else {
-  //     // Hide all barcode change options
-  //     scanBarcodeSection.classList.add('d-none');
-  //     generatedBarcodeSection.classList.add('d-none');
-  //     if (barcodeTypeOptions) barcodeTypeOptions.classList.add('d-none');
-  //   }
-  // }
 
   function toggleChangeBarcode() {
     const changeBarcode = document.getElementById('changeBarcode');
@@ -2050,58 +2111,183 @@ function updateBarcodeFormVisibility() {
 }
 
 // Open transaction modal
-function openTransactionModal(itemId, itemName) {
-  const modal = document.getElementById('transactionModal');
-  const transactionItemId = document.getElementById('transactionItemId');
-  const transactionItem = document.getElementById('transactionItem');
-  const transactionType = document.getElementById('transactionType');
+/**
+ * Fixed function to properly open the transaction modal
+ * @param {string} itemId - The ID of the item
+ * @param {string} itemName - The name of the item
+ */
+
+
+
+
+
+
+
+// function to fix transaction modal
+function fixTransactionModal() {
+  console.log('Fixing transaction modal...');
   
-  // Reset form
-  document.getElementById('transactionForm').reset();
+  // First, check if the modal exists in DOM
+  const transactionModal = document.getElementById('transactionModal');
+  if (!transactionModal) {
+    console.error('Transaction modal element not found in the DOM!');
+    return;
+  }
   
-  // Set item details
-  transactionItemId.value = itemId;
-  transactionItem.value = itemName;
+  // Clean up any existing modal instances to prevent conflicts
+  const existingModal = bootstrap.Modal.getInstance(transactionModal);
+  if (existingModal) {
+    existingModal.dispose();
+  }
   
-  // Add event listener to transaction type
-  transactionType.addEventListener('change', () => {
-    updateTransactionForm(transactionType.value);
+  // Remove any stray backdrop elements
+  document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+    backdrop.remove();
   });
   
-  // Open the modal
-  const modalInstance = new bootstrap.Modal(modal);
-  modalInstance.show();
+  // Remove modal-open class from body if present
+  document.body.classList.remove('modal-open');
+  document.body.style.overflow = '';
+  document.body.style.paddingRight = '';
+  
+  // Make sure the modal is visible in DOM
+  transactionModal.style.display = 'block';
+  transactionModal.style.visibility = 'visible';
+  transactionModal.classList.remove('hide');
+  transactionModal.removeAttribute('aria-hidden');
+  
+  // Add dialog centered class for better positioning
+  transactionModal.querySelector('.modal-dialog').classList.add('modal-dialog-centered');
+  
+  // Reattach transaction buttons event listeners
+  document.querySelectorAll('.transaction-btn').forEach(btn => {
+    // Clone and replace to remove old event listeners
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    
+    newBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('Transaction button clicked');
+      
+      const itemId = newBtn.dataset.id;
+      const itemName = newBtn.dataset.name;
+      
+      if (itemId && itemName) {
+        // openTransactionModal(itemId, itemName);
+        fetchItemForTransaction(itemId);
+      }
+    });
+  });
+
+  // Create a fresh modal instance explicitly
+  try {
+    // Create a brand new modal instance
+    const modalInstance = new bootstrap.Modal(transactionModal, {
+      backdrop: true,
+      keyboard: true,
+      focus: true
+    });
+    
+    // Store it for future reference
+    window.currentTransactionModal = modalInstance;
+  } catch (error) {
+    console.error('Error creating modal instance:', error);
+  }
+
+  fixModals();
 }
 
-// Update transaction form based on type
-function updateTransactionForm(type) {
-  const fromLocationGroup = document.getElementById('fromLocationGroup');
-  const toLocationGroup = document.getElementById('toLocationGroup');
-  
-  // Reset display
-  fromLocationGroup.style.display = 'none';
-  toLocationGroup.style.display = 'none';
-  
-  // Show relevant fields based on transaction type
-  switch (type) {
-    case 'Check-in':
-      fromLocationGroup.style.display = 'block';
-      break;
-    case 'Check-out':
-      toLocationGroup.style.display = 'block';
-      break;
-    case 'Maintenance':
-      // No locations needed
-      break;
-    case 'Restock':
-      // Show both for complete tracking
-      fromLocationGroup.style.display = 'block';
-      toLocationGroup.style.display = 'block';
-      break;
-    default:
-      break;
-  }
+
+
+
+
+function addModalFixStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    .modal-backdrop {
+      z-index: 1040 !important;
+    }
+    .modal {
+      z-index: 1050 !important;
+    }
+  `;
+  document.head.appendChild(style);
 }
+
+
+
+
+
+// Call this function at the end of your DOMContentLoaded event
+document.addEventListener('DOMContentLoaded', function() {
+  // ... other initialization code ...
+  
+  // // Set up transaction buttons
+  // setupTransactionButtons();
+  
+  // Fix any modals that might have issues
+  fixModals();
+});
+
+// Function to fix potential modal issues
+function fixModals() {
+  // Clean up any stray backdrops or broken modals
+  document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+    backdrop.remove();
+  });
+  
+  // Remove modal-open class if no modals are actually shown
+  if (!document.querySelector('.modal.show')) {
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+  }
+  
+  // Fix all modals on the page
+  document.querySelectorAll('.modal').forEach(modal => {
+    // Make sure hidden modals are actually hidden
+    if (!modal.classList.contains('show')) {
+      modal.style.display = 'none';
+    }
+    
+    // Add proper event listeners for hiding
+    modal.addEventListener('hidden.bs.modal', function() {
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+      
+      // Remove any stray backdrops
+      document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+        backdrop.remove();
+      });
+    });
+  });
+}
+
+// Add this CSS fix to fix z-index issues
+function addModalCssFix() {
+  const style = document.createElement('style');
+  style.textContent = `
+    .modal-backdrop {
+      z-index: 1040 !important;
+    }
+    .modal {
+      z-index: 1050 !important;
+    }
+    .modal-dialog {
+      margin: 1.75rem auto !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// Run this fix as soon as possible
+addModalCssFix();
+
+// Update transaction form based on type
+
+
 
 
 
@@ -2169,7 +2355,7 @@ function saveItem() {
     }
     const status = document.getElementById('itemStatus').value;
     const description = document.getElementById('itemDescription').value;
-    const serialNumber = document.getElementById('itemSerialNumber').value;
+    const akuNo = document.getElementById('itemAkuNo').value;
     const manufacturer = document.getElementById('itemManufacturer').value;
     const supplier = document.getElementById('itemSupplier').value;
     const quantity = document.getElementById('itemQuantity').value;
@@ -2259,7 +2445,7 @@ function saveItem() {
     }
     
     // Validate required fields
-    if (!name || !category || !quantity || !unitCost || !room) {
+    if (!name || !category || !quantity || !room) {
       console.warn('Missing required fields');
       showAlert('Please fill in all required fields', 'danger');
       return;
@@ -2272,7 +2458,7 @@ function saveItem() {
       categoryType: categoryType,
       status,
       description,
-      serialNumber,
+      akuNo,
       barcode,
       barcodeType,
       manufacturer,
@@ -2394,81 +2580,8 @@ function saveItem() {
   }
 }
 // Save transaction
-async function saveTransaction() {
-  try {
-    // Get form data
-    const itemId = document.getElementById('transactionItemId').value;
-    const type = document.getElementById('transactionType').value;
-    const quantity = document.getElementById('transactionQuantity').value;
-    const fromLocation = document.getElementById('transactionFromLocation').value;
-    const toLocation = document.getElementById('transactionToLocation').value;
-    const notes = document.getElementById('transactionNotes').value;
-    
-    // Validate required fields
-    if (!type || !quantity) {
-      showAlert('Please fill in all required fields', 'danger');
-      return;
-    }
-    
-    // Prepare transaction data
-    const transactionData = {
-      type,
-      quantity: parseInt(quantity),
-      notes
-    };
-    
-    // Add locations based on transaction type
-    if (fromLocation) {
-      transactionData.fromLocation = fromLocation;
-    }
-    
-    if (toLocation) {
-      transactionData.toLocation = toLocation;
-    }
-    
-    // Show loading state
-    const saveBtn = document.getElementById('saveTransactionBtn');
-    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Saving...';
-    saveBtn.disabled = true;
-    
-    // Create transaction
-    const response = await fetchWithAuth(`${API_URL}/items/${itemId}/transaction`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(transactionData)
-    });
-    
-    // Reset button state
-    saveBtn.innerHTML = 'Save Transaction';
-    saveBtn.disabled = false;
-    
-    if (!response) return;
-    
-    if (response.ok) {
-      // Close modal
-      bootstrap.Modal.getInstance(document.getElementById('transactionModal')).hide();
-      
-      // Show success message
-      showAlert('Transaction created successfully', 'success');
-      
-      // Reload inventory
-      loadInventoryItems();
-    } else {
-      const errorData = await response.json();
-      showAlert(errorData.message || 'Failed to create transaction', 'danger');
-    }
-  } catch (error) {
-    console.error('Save transaction error:', error);
-    showAlert('Failed to connect to server. Please try again.', 'danger');
-    
-    // Reset button state
-    const saveBtn = document.getElementById('saveTransactionBtn');
-    saveBtn.innerHTML = 'Save Transaction';
-    saveBtn.disabled = false;
-  }
-}
+
+
 
 // Delete item
 async function deleteItem(itemId) {
@@ -2851,6 +2964,521 @@ function testBarcodeScanning() {
   }, 500);
 }
 
+// Function to set up all transaction-related functionality
+function setupEnhancedTransactions() {
+  console.log("Setting up enhanced transaction functionality");
+  
+  // 1. Attach event listeners to transaction buttons
+  document.addEventListener('click', function(e) {
+    const transactionBtn = e.target.closest('.transaction-btn');
+    if (transactionBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const itemId = transactionBtn.dataset.id;
+      const itemName = transactionBtn.dataset.name;
+      
+      if (itemId && itemName) {
+        // Fetch item data before opening modal
+        fetchItemForTransaction(itemId);
+      }
+    }
+  });
+  
+  // 2. Set up transaction type change handler
+  const transactionTypeSelect = document.getElementById('enhancedTransactionType');
+  if (transactionTypeSelect) {
+    transactionTypeSelect.addEventListener('change', function() {
+      updateEnhancedTransactionForm(this.value);
+    });
+  }
+  
+  // 3. Set up save button handler
+  const saveBtn = document.getElementById('enhancedSaveTransactionBtn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', saveEnhancedTransaction);
+  }
+  
+  // 4. Load locations for dropdowns
+  loadLocationsForTransaction();
+
+  // Setup close button handlers
+const closeButtons = document.querySelectorAll('#enhancedTransactionModal .btn-close, #enhancedTransactionModal .btn-secondary');
+closeButtons.forEach(button => {
+  button.addEventListener('click', function(e) {
+    console.log('Close button clicked');
+    e.preventDefault();
+    e.stopPropagation();
+    closeEnhancedModalDirectly();
+  });
+});
+
+// Add escape key handler
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const modal = document.getElementById('enhancedTransactionModal');
+    if (modal && modal.classList.contains('show')) {
+      closeEnhancedModalDirectly();
+    }
+  }
+});
+}
+
+
+
+
+
+// Load locations for transaction dropdowns
+async function loadLocationsForTransaction() {
+  try {
+    const response = await fetchWithAuth(`${API_URL}/locations/hierarchy`);
+    
+    if (!response || !response.ok) return;
+    
+    const locationHierarchy = await response.json();
+    
+    // Populate location dropdowns
+    const fromLocationSelect = document.getElementById('enhancedTransactionFromLocation');
+    const toLocationSelect = document.getElementById('enhancedTransactionToLocation');
+    
+    if (!fromLocationSelect || !toLocationSelect) return;
+    
+    // Clear existing options
+    fromLocationSelect.innerHTML = '<option value="">Select Location</option>';
+    toLocationSelect.innerHTML = '<option value="">Select Location</option>';
+    
+    // Add new options
+    locationHierarchy.forEach(room => {
+      fromLocationSelect.innerHTML += `<option value="${room._id}">${room.name}</option>`;
+      toLocationSelect.innerHTML += `<option value="${room._id}">${room.name}</option>`;
+    });
+  } catch (error) {
+    console.error('Error loading locations:', error);
+  }
+}
+
+// Fetch item data before opening transaction modal
+async function fetchItemForTransaction(itemId) {
+  try {
+    // Show loading state
+    showAlert('Loading item data...', 'info', 'alertContainer', true);
+    
+    const response = await fetchWithAuth(`${API_URL}/items/${itemId}`);
+    
+    if (!response || !response.ok) {
+      showAlert('Failed to load item data', 'danger');
+      return;
+    }
+    
+    const item = await response.json();
+    
+    // Store item data for transaction
+    transactionItemData = item;
+    
+    // Show success message
+    showAlert(`Item found: ${item.name}`, 'success');
+    
+    // Now open the modal with our direct method
+    showEnhancedModalDirectly(item);
+  } catch (error) {
+    console.error('Error fetching item for transaction:', error);
+    showAlert('Error loading item data', 'danger');
+  }
+}
+
+
+// Configure transaction type options based on item category and status
+function configureTransactionTypes(item) {
+  const typeSelect = document.getElementById('enhancedTransactionType');
+  if (!typeSelect) return;
+  
+  // Clear existing options
+  typeSelect.innerHTML = '<option value="">Select Transaction Type</option>';
+  
+  // Add relevant transaction types based on category
+  if (item.category === 'Consumable') {
+    // Consumable-specific options
+    typeSelect.innerHTML += `
+      <option value="Stock Addition">Add Stock</option>
+      <option value="Stock Removal">Remove Stock</option>
+    `;
+    
+    // Default to stock addition for consumables
+    typeSelect.value = 'Stock Addition';
+  } else {
+    // Equipment-specific options
+    typeSelect.innerHTML += `
+      <option value="Stock Addition">Add Stock</option>
+      <option value="Stock Removal">Remove Stock</option>
+      <option value="Relocate">Relocate</option>
+      <option value="Check Out for Session">Use in Session</option>
+      <option value="Return from Session">Return from Session</option>
+      <option value="Rent Out">Rent Out</option>
+      <option value="Return from Rental">Return from Rental</option>
+      <option value="Send to Maintenance">Send to Maintenance</option>
+      <option value="Return from Maintenance">Return from Maintenance</option>
+    `;
+    
+    // Set intelligent default based on item state
+    if ((item.currentState?.inMaintenance || 0) > 0) {
+      typeSelect.value = 'Return from Maintenance';
+    } else if ((item.currentState?.inSession || 0) > 0) {
+      typeSelect.value = 'Return from Session';
+    } else if ((item.currentState?.rented || 0) > 0) {
+      typeSelect.value = 'Return from Rental';
+    } else {
+      typeSelect.value = 'Stock Addition';
+    }
+  }
+  
+  // Trigger update to show/hide relevant fields
+  updateEnhancedTransactionForm(typeSelect.value);
+}
+
+// Update form fields based on selected transaction type
+function updateEnhancedTransactionForm(type) {
+  // Get all form groups
+  const fromLocationGroup = document.getElementById('enhancedFromLocationGroup');
+  const toLocationGroup = document.getElementById('enhancedToLocationGroup');
+  const sessionDetailsGroup = document.getElementById('enhancedSessionDetailsGroup');
+  const rentalDetailsGroup = document.getElementById('enhancedRentalDetailsGroup');
+  const maintenanceDetailsGroup = document.getElementById('enhancedMaintenanceDetailsGroup');
+  
+  // Hide all groups first
+  if (fromLocationGroup) fromLocationGroup.style.display = 'none';
+  if (toLocationGroup) toLocationGroup.style.display = 'none';
+  if (sessionDetailsGroup) sessionDetailsGroup.style.display = 'none';
+  if (rentalDetailsGroup) rentalDetailsGroup.style.display = 'none';
+  if (maintenanceDetailsGroup) maintenanceDetailsGroup.style.display = 'none';
+  
+  // Show relevant groups based on transaction type
+  switch(type) {
+    case 'Stock Addition':
+      // No special fields needed
+      break;
+    
+    case 'Stock Removal':
+      // No special fields needed
+      break;
+    
+    case 'Relocate':
+      // Need destination location
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      break;
+    
+    case 'Check Out for Session':
+      // Need session details and destination
+      if (sessionDetailsGroup) sessionDetailsGroup.style.display = 'block';
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      break;
+    
+    case 'Return from Session':
+      // Need session details
+      if (sessionDetailsGroup) sessionDetailsGroup.style.display = 'block';
+      break;
+    
+    case 'Rent Out':
+      // Need rental details
+      if (rentalDetailsGroup) rentalDetailsGroup.style.display = 'block';
+      break;
+    
+    case 'Return from Rental':
+      // Need rental details
+      if (rentalDetailsGroup) rentalDetailsGroup.style.display = 'block';
+      break;
+    
+    case 'Send to Maintenance':
+      // Need maintenance details
+      if (maintenanceDetailsGroup) maintenanceDetailsGroup.style.display = 'block';
+      break;
+    
+    case 'Return from Maintenance':
+      // Need maintenance details
+      if (maintenanceDetailsGroup) maintenanceDetailsGroup.style.display = 'block';
+      break;
+  }
+  
+  // Set the max quantity based on transaction type and item state
+  updateQuantityLimits(type);
+}
+
+// Update quantity limits based on transaction type
+function updateQuantityLimits(type) {
+  if (!transactionItemData) return;
+  
+  const quantityInput = document.getElementById('enhancedTransactionQuantity');
+  if (!quantityInput) return;
+  
+  const item = transactionItemData;
+  let maxQuantity = 1;
+  
+  switch(type) {
+    case 'Stock Addition':
+      // No real limit for adding stock
+      maxQuantity = 9999;
+      break;
+      
+    case 'Stock Removal':
+    case 'Relocate':
+    case 'Check Out for Session':
+    case 'Rent Out':
+    case 'Send to Maintenance':
+      // Limited by available quantity
+      maxQuantity = item.availableQuantity !== undefined ? 
+        item.availableQuantity : item.quantity;
+      break;
+      
+    case 'Return from Session':
+      // Limited by items in session
+      maxQuantity = item.currentState?.inSession || 0;
+      break;
+      
+    case 'Return from Rental':
+      // Limited by items rented
+      maxQuantity = item.currentState?.rented || 0;
+      break;
+      
+    case 'Return from Maintenance':
+      // Limited by items in maintenance
+      maxQuantity = item.currentState?.inMaintenance || 0;
+      break;
+  }
+  
+  // Set the max attribute
+  quantityInput.max = maxQuantity;
+  
+  // If current value exceeds max, adjust it
+  if (parseInt(quantityInput.value) > maxQuantity) {
+    quantityInput.value = maxQuantity;
+  }
+  
+  // Ensure minimum of 1
+  if (parseInt(quantityInput.value) < 1) {
+    quantityInput.value = 1;
+  }
+}
+
+// Save the transaction
+async function saveEnhancedTransaction() {
+  try {
+    // Get form data
+    const itemId = document.getElementById('enhancedTransactionItemId').value;
+    const type = document.getElementById('enhancedTransactionType').value;
+    const quantity = document.getElementById('enhancedTransactionQuantity').value;
+    
+    // Basic validation
+    if (!type || !quantity || parseInt(quantity) <= 0) {
+      showAlert('Please enter a valid quantity and select a transaction type', 'danger', 'enhancedTransactionAlerts');
+      return;
+    }
+    
+    // Build transaction data object
+    const transactionData = {
+      type,
+      quantity: parseInt(quantity),
+      notes: document.getElementById('enhancedTransactionNotes').value
+    };
+    
+    // Add location data if visible and selected
+    const fromLocationGroup = document.getElementById('enhancedFromLocationGroup');
+    if (fromLocationGroup && fromLocationGroup.style.display !== 'none') {
+      const fromLocation = document.getElementById('enhancedTransactionFromLocation').value;
+      if (fromLocation) {
+        transactionData.fromLocation = fromLocation;
+      }
+    }
+    
+    const toLocationGroup = document.getElementById('enhancedToLocationGroup');
+    if (toLocationGroup && toLocationGroup.style.display !== 'none') {
+      const toLocation = document.getElementById('enhancedTransactionToLocation').value;
+      if (toLocation) {
+        transactionData.toLocation = toLocation;
+      }
+    }
+    
+    // Add session data if visible and filled
+    const sessionDetailsGroup = document.getElementById('enhancedSessionDetailsGroup');
+    if (sessionDetailsGroup && sessionDetailsGroup.style.display !== 'none') {
+      const sessionName = document.getElementById('enhancedSessionName').value;
+      const sessionLocation = document.getElementById('enhancedSessionLocation').value;
+      
+      if (sessionName || sessionLocation) {
+        transactionData.session = {
+          name: sessionName,
+          location: sessionLocation
+        };
+      }
+    }
+    
+    // Add rental data if visible and filled
+    const rentalDetailsGroup = document.getElementById('enhancedRentalDetailsGroup');
+    if (rentalDetailsGroup && rentalDetailsGroup.style.display !== 'none') {
+      const rentedTo = document.getElementById('enhancedRentedTo').value;
+      const expectedReturnDate = document.getElementById('enhancedExpectedReturnDate').value;
+      
+      if (rentedTo) {
+        transactionData.rental = {
+          rentedTo,
+          expectedReturnDate: expectedReturnDate || null
+        };
+      } else if (type === 'Rent Out') {
+        showAlert('Please specify who the item is rented to', 'warning', 'enhancedTransactionAlerts');
+        return;
+      }
+    }
+    
+    // Add maintenance data if visible and filled
+    const maintenanceDetailsGroup = document.getElementById('enhancedMaintenanceDetailsGroup');
+    if (maintenanceDetailsGroup && maintenanceDetailsGroup.style.display !== 'none') {
+      const provider = document.getElementById('enhancedMaintenanceProvider').value;
+      const expectedEndDate = document.getElementById('enhancedExpectedEndDate').value;
+      
+      if (provider || expectedEndDate) {
+        transactionData.maintenance = {
+          provider,
+          expectedEndDate: expectedEndDate || null
+        };
+      }
+    }
+    
+    // Show loading state
+    const saveBtn = document.getElementById('enhancedSaveTransactionBtn');
+    if (saveBtn) {
+      saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Saving...';
+      saveBtn.disabled = true;
+    }
+    
+    // Send the request
+    const response = await fetchWithAuth(`${API_URL}/items/${itemId}/enhanced-transaction`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(transactionData)
+    });
+    
+    // Reset button state
+    if (saveBtn) {
+      saveBtn.innerHTML = 'Save Transaction';
+      saveBtn.disabled = false;
+    }
+    
+    if (!response) {
+      showAlert('Failed to connect to server', 'danger', 'enhancedTransactionAlerts');
+      return;
+    }
+    
+    if (response.ok) {
+      // Close the modal
+      
+      closeEnhancedModalDirectly();
+      
+      // Show success message
+      showAlert('Transaction created successfully', 'success');
+      
+      // Reload inventory to reflect changes
+      loadInventoryItems();
+      
+      // Reset transaction item data
+      transactionItemData = null;
+    } else {
+      try {
+        const errorData = await response.json();
+        showAlert(errorData.message || 'Failed to create transaction', 'danger', 'enhancedTransactionAlerts');
+      } catch (e) {
+        showAlert('Failed to create transaction', 'danger', 'enhancedTransactionAlerts');
+      }
+    }
+  } catch (error) {
+    console.error('Error saving transaction:', error);
+    showAlert('An error occurred while saving the transaction', 'danger', 'enhancedTransactionAlerts');
+    
+    // Reset button state
+    const saveBtn = document.getElementById('enhancedSaveTransactionBtn');
+    if (saveBtn) {
+      saveBtn.innerHTML = 'Save Transaction';
+      saveBtn.disabled = false;
+    }
+  }
+}
+
+
+
+// Function to directly show the enhanced transaction modal without Bootstrap
+function showEnhancedModalDirectly(item) {
+  if (!item) return;
+  
+  // Get the modal element
+  const modal = document.getElementById('enhancedTransactionModal');
+  if (!modal) {
+    console.error('Enhanced transaction modal not found');
+    return;
+  }
+  
+  // Clean up any existing modal state first
+  closeEnhancedModalDirectly();
+  
+  // Manually add the classes and styles Bootstrap would add
+  document.body.classList.add('modal-open');
+  document.body.style.overflow = 'hidden';
+  document.body.style.paddingRight = '15px'; // Compensate for scrollbar
+  
+  // Create backdrop if it doesn't exist
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop fade show';
+  backdrop.id = 'custom-modal-backdrop';
+  document.body.appendChild(backdrop);
+  
+  // Show modal
+  modal.classList.add('show');
+  modal.style.display = 'block';
+  modal.setAttribute('aria-modal', 'true');
+  modal.removeAttribute('aria-hidden');
+  
+  // Set item details
+  document.getElementById('enhancedTransactionItemId').value = item._id;
+  document.getElementById('enhancedTransactionItem').value = item.name;
+  
+  // Configure transaction types based on item
+  configureTransactionTypes(item);
+  
+  // Set quantity max
+  const quantityInput = document.getElementById('enhancedTransactionQuantity');
+  if (quantityInput) {
+    const availableQuantity = item.availableQuantity !== undefined ? 
+      item.availableQuantity : item.quantity;
+    quantityInput.max = availableQuantity;
+    quantityInput.value = 1;
+  }
+  
+  console.log('Enhanced modal shown manually');
+}
+
+// Function to close the enhanced transaction modal
+function closeEnhancedModalDirectly() {
+  const modal = document.getElementById('enhancedTransactionModal');
+  if (modal) {
+    modal.classList.remove('show');
+    modal.style.display = 'none';
+    modal.removeAttribute('aria-modal');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+  
+  // Remove backdrop - both with id and by class name to be thorough
+  const customBackdrop = document.getElementById('custom-modal-backdrop');
+  if (customBackdrop) {
+    customBackdrop.remove();
+  }
+  
+  document.querySelectorAll('.modal-backdrop').forEach(el => {
+    el.remove();
+  });
+  
+  // Reset body
+  document.body.classList.remove('modal-open');
+  document.body.style.overflow = '';
+  document.body.style.paddingRight = '';
+}
 
 
 
@@ -3008,7 +3636,7 @@ if (addItemBtn) {
     document.getElementById('saveItemBtn').addEventListener('click', saveItem);
   
   // Save transaction button
-  document.getElementById('saveTransactionBtn').addEventListener('click', saveTransaction);
+  // document.getElementById('saveTransactionBtn').addEventListener('click', saveTransaction);
   
   // Export button
   document.getElementById('exportBtn').addEventListener('click', exportToCSV);
@@ -3063,6 +3691,15 @@ const btnToolbar = document.querySelector('.btn-toolbar');
 if (btnToolbar) {
   btnToolbar.appendChild(testBarcodesBtn);
 }
+
+const transactionType = document.getElementById('transactionType');
+if (transactionType) {
+  transactionType.addEventListener('change', function() {
+    updateTransactionForm(this.value);
+  });
+}
+
+
 
 
 

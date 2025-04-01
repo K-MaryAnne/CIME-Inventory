@@ -40,7 +40,7 @@ const getItems = async (req, res) => {
       filter.$or = [
         { name: { $regex: req.query.search, $options: 'i' } },
         { barcode: { $regex: req.query.search, $options: 'i' } },
-        { serialNumber: { $regex: req.query.search, $options: 'i' } }
+        { akuNo: { $regex: req.query.search, $options: 'i' } }
       ];
     }
     
@@ -110,7 +110,7 @@ console.log('Attempting to create item with data:', req.body);
         name,
         category,
         description,
-        serialNumber,
+        akuNo,
         barcode,
         barcodeType, // 'existing' or 'generate'
         location,
@@ -153,7 +153,7 @@ console.log('Attempting to create item with data:', req.body);
         name,
         category,
         description,
-        serialNumber,
+        akuNo,
         barcode: itemBarcode,
         barcodeType: barcodeType || 'generate',
         location,
@@ -344,11 +344,35 @@ const createItemTransaction = async (req, res) => {
       item: item._id,
       type,
       quantity: parseInt(quantity),
-      fromLocation,
-      toLocation,
-      performedBy: req.user._id,
-      notes
+      performedBy: req.user._id
+     
     });
+
+
+// Only add non-empty fields
+if (fromLocation && fromLocation !== '') {
+  transactionData.fromLocation = fromLocation;
+}
+
+if (toLocation && toLocation !== '') {
+  transactionData.toLocation = toLocation;
+}
+
+if (session && (session.name || session.location)) {
+  transactionData.session = session;
+}
+
+if (rental && rental.rentedTo) {
+  transactionData.rental = rental;
+}
+
+if (maintenance && (maintenance.provider || maintenance.expectedEndDate)) {
+  transactionData.maintenance = maintenance;
+}
+
+if (notes) {
+  transactionData.notes = notes;
+}
     
     // Check if below reorder level
     if (item.quantity <= item.reorderLevel && type === 'Check-out') {
@@ -403,6 +427,410 @@ const getLowStockItems = async (req, res) => {
   }
 };
 
+
+
+// @desc    Create an enhanced transaction
+// @route   POST /api/items/:id/transaction
+// @access  Private
+const createEnhancedTransaction = async (req, res) => {
+  try {
+    const {
+      type,
+      quantity,
+      fromLocation,
+      toLocation,
+      session,
+      rental,
+      maintenance,
+      notes
+    } = req.body;
+    
+    // Validate the quantity
+    if (!quantity || quantity <= 0) {
+      return res.status(400).json({ 
+        message: 'Quantity must be greater than zero' 
+      });
+    }
+    
+    // Get the item
+    const item = await Item.findById(req.params.id);
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    
+    // Handle different transaction types
+    switch (type) {
+      // STOCK MANAGEMENT TRANSACTIONS
+      
+      case 'Stock Addition':
+        // Add to total and available quantity
+        item.quantity += parseInt(quantity);
+        item.availableQuantity += parseInt(quantity);
+        break;
+        
+      case 'Stock Removal':
+        // Make sure there's enough available quantity
+        if (item.availableQuantity < parseInt(quantity)) {
+          return res.status(400).json({ 
+            message: 'Not enough available items for removal' 
+          });
+        }
+        
+        // Remove from total and available quantity
+        item.quantity -= parseInt(quantity);
+        item.availableQuantity -= parseInt(quantity);
+        break;
+      
+      // LOCATION TRANSACTIONS
+      
+      case 'Relocate':
+        // For relocation, the item remains available
+        // Just update the item's location
+        if (toLocation) {
+          item.location.room = toLocation;
+        }
+        break;
+      
+      // SESSION TRANSACTIONS
+      
+      case 'Check Out for Session':
+        // Make sure there's enough available quantity
+        if (item.availableQuantity < parseInt(quantity)) {
+          return res.status(400).json({ 
+            message: 'Not enough available items' 
+          });
+        }
+        
+        // Reduce available quantity
+        item.availableQuantity -= parseInt(quantity);
+        
+        // Update session state
+        item.currentState.inSession += parseInt(quantity);
+        
+        // Add session record if session info provided
+        if (session && (session.name || session.location)) {
+          item.sessionRecords.push({
+            sessionName: session.name || 'Unnamed Session',
+            location: session.location || 'Unknown Location',
+            startDate: new Date(),
+            quantity: parseInt(quantity),
+            notes: notes || ''
+          });
+        }
+        break;
+        
+      case 'Return from Session':
+        // Make sure the amount being returned doesn't exceed what's in session
+        if (item.currentState.inSession < parseInt(quantity)) {
+          return res.status(400).json({ 
+            message: `Cannot return more items than are in session (${item.currentState.inSession} currently in session)` 
+          });
+        }
+        
+        // Increase available quantity
+        item.availableQuantity += parseInt(quantity);
+        
+        // Update session state
+        item.currentState.inSession -= parseInt(quantity);
+        
+        // Update session record if matching session found
+        if (session && session.name) {
+          const sessionRecord = item.sessionRecords.find(
+            record => record.sessionName === session.name && !record.endDate
+          );
+          
+          if (sessionRecord) {
+            sessionRecord.endDate = new Date();
+            sessionRecord.notes += notes ? `\nReturn notes: ${notes}` : '';
+          }
+        }
+        break;
+      
+      // RENTAL TRANSACTIONS
+      
+      case 'Rent Out':
+        // Make sure there's enough available quantity
+        if (item.availableQuantity < parseInt(quantity)) {
+          return res.status(400).json({ 
+            message: 'Not enough available items' 
+          });
+        }
+        
+        // Reduce available quantity
+        item.availableQuantity -= parseInt(quantity);
+        
+        // Update rental state
+        item.currentState.rented += parseInt(quantity);
+        
+        // Add rental record if rental info provided
+        if (rental && rental.rentedTo) {
+          item.rentalRecords.push({
+            rentedTo: rental.rentedTo,
+            startDate: new Date(),
+            expectedReturnDate: rental.expectedReturnDate || null,
+            quantity: parseInt(quantity),
+            notes: notes || ''
+          });
+        }
+        break;
+        
+      case 'Return from Rental':
+        // Make sure the amount being returned doesn't exceed what's rented
+        if (item.currentState.rented < parseInt(quantity)) {
+          return res.status(400).json({ 
+            message: `Cannot return more items than are rented (${item.currentState.rented} currently rented)` 
+          });
+        }
+        
+        // Increase available quantity
+        item.availableQuantity += parseInt(quantity);
+        
+        // Update rental state
+        item.currentState.rented -= parseInt(quantity);
+        
+        // Update rental record if matching rental found
+        if (rental && rental.rentedTo) {
+          const rentalRecord = item.rentalRecords.find(
+            record => record.rentedTo === rental.rentedTo && !record.returnedDate
+          );
+          
+          if (rentalRecord) {
+            rentalRecord.returnedDate = new Date();
+            rentalRecord.notes += notes ? `\nReturn notes: ${notes}` : '';
+          }
+        }
+        break;
+      
+      // MAINTENANCE TRANSACTIONS
+      
+      case 'Send to Maintenance':
+        // Make sure there's enough available quantity
+        if (item.availableQuantity < parseInt(quantity)) {
+          return res.status(400).json({ 
+            message: 'Not enough available items' 
+          });
+        }
+        
+        // Reduce available quantity
+        item.availableQuantity -= parseInt(quantity);
+        
+        // Update maintenance state
+        item.currentState.inMaintenance += parseInt(quantity);
+        
+        // Record maintenance start
+        item.lastMaintenanceDate = new Date();
+        
+        // Add maintenance record
+        item.maintenanceRecords.push({
+          startDate: new Date(),
+          expectedEndDate: maintenance?.expectedEndDate || null,
+          quantity: parseInt(quantity),
+          notes: notes || ''
+        });
+        break;
+        
+      case 'Return from Maintenance':
+        // Make sure the amount being returned doesn't exceed what's in maintenance
+        if (item.currentState.inMaintenance < parseInt(quantity)) {
+          return res.status(400).json({ 
+            message: `Cannot return more items than are in maintenance (${item.currentState.inMaintenance} currently in maintenance)` 
+          });
+        }
+        
+        // Increase available quantity
+        item.availableQuantity += parseInt(quantity);
+        
+        // Update maintenance state
+        item.currentState.inMaintenance -= parseInt(quantity);
+        
+        // Update maintenance record
+        const maintenanceRecord = item.maintenanceRecords
+          .filter(record => !record.completedDate)
+          .sort((a, b) => b.startDate - a.startDate)[0];
+          
+        if (maintenanceRecord) {
+          maintenanceRecord.completedDate = new Date();
+          maintenanceRecord.notes += notes ? `\nCompletion notes: ${notes}` : '';
+        }
+        break;
+      
+      // LEGACY TRANSACTION TYPES (for backward compatibility)
+      
+      case 'Check-in':
+        item.availableQuantity += parseInt(quantity);
+        // Check if we need to update a state counter (for non-consumables)
+        if (item.category !== 'Consumable') {
+          if (item.status === 'Under Maintenance') {
+            item.currentState.inMaintenance -= Math.min(
+              parseInt(quantity), 
+              item.currentState.inMaintenance
+            );
+          } else if (item.status === 'Rented Out') {
+            item.currentState.rented -= Math.min(
+              parseInt(quantity), 
+              item.currentState.rented
+            );
+          } else if (item.status === 'In Session') {
+            item.currentState.inSession -= Math.min(
+              parseInt(quantity), 
+              item.currentState.inSession
+            );
+          }
+        }
+        break;
+        
+      case 'Check-out':
+        if (item.availableQuantity < parseInt(quantity)) {
+          return res.status(400).json({ 
+            message: 'Not enough available items' 
+          });
+        }
+        item.availableQuantity -= parseInt(quantity);
+        break;
+        
+      case 'Restock':
+        item.quantity += parseInt(quantity);
+        item.availableQuantity += parseInt(quantity);
+        break;
+        
+      case 'Maintenance':
+        if (item.category === 'Consumable') {
+          return res.status(400).json({ 
+            message: 'Maintenance is not applicable for consumable items' 
+          });
+        }
+        
+        if (item.availableQuantity < parseInt(quantity)) {
+          return res.status(400).json({ 
+            message: 'Not enough available items' 
+          });
+        }
+        
+        item.availableQuantity -= parseInt(quantity);
+        item.currentState.inMaintenance += parseInt(quantity);
+        item.lastMaintenanceDate = new Date();
+        break;
+        
+      default:
+        return res.status(400).json({ 
+          message: 'Invalid transaction type' 
+        });
+    }
+    
+    // Save the updated item
+    item.updatedAt = new Date();
+    await item.save();
+    
+    // Create transaction record
+    const transaction = await Transaction.create({
+      item: item._id,
+      type,
+      quantity: parseInt(quantity),
+      fromLocation,
+      toLocation,
+      session,
+      rental,
+      maintenance,
+      performedBy: req.user._id,
+      notes
+    });
+    
+    // Check if consumable is below reorder level (for any transaction type)
+    if (item.category === 'Consumable' && item.quantity <= item.reorderLevel) {
+      // Send low stock alert email
+      // (Keep existing low stock alert code)
+    }
+    
+    res.status(201).json(transaction);
+  } catch (error) {
+    console.error('Transaction error:', error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};
+
+
+// @desc    Get item transactions by category
+// @route   GET /api/items/:id/transactions/grouped
+// @access  Private
+const getItemTransactionsGrouped = async (req, res) => {
+  try {
+    const itemId = req.params.id;
+    
+    // Get the item to determine its category
+    const item = await Item.findById(itemId);
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    
+    // Get all transactions for this item
+    const transactions = await Transaction.find({ item: itemId })
+      .populate('performedBy', 'name')
+      .populate('fromLocation', 'name')
+      .populate('toLocation', 'name')
+      .sort({ timestamp: -1 });
+    
+    // Group transactions by state
+    const grouped = {
+      stock: [],        // Stock addition/removal
+      location: [],     // Relocations
+      session: [],      // Session check-outs/returns
+      rental: [],       // Rental check-outs/returns
+      maintenance: [],  // Maintenance transactions
+      legacy: []        // Old transaction types
+    };
+    
+    // Categorize each transaction
+    transactions.forEach(txn => {
+      switch (txn.type) {
+        case 'Stock Addition':
+        case 'Stock Removal':
+          grouped.stock.push(txn);
+          break;
+          
+        case 'Relocate':
+          grouped.location.push(txn);
+          break;
+          
+        case 'Check Out for Session':
+        case 'Return from Session':
+          grouped.session.push(txn);
+          break;
+          
+        case 'Rent Out':
+        case 'Return from Rental':
+          grouped.rental.push(txn);
+          break;
+          
+        case 'Send to Maintenance':
+        case 'Return from Maintenance':
+          grouped.maintenance.push(txn);
+          break;
+          
+        default:
+          grouped.legacy.push(txn);
+          break;
+      }
+    });
+    
+    // Respond with grouped transactions
+    res.json({
+      category: item.category,
+      state: {
+        available: item.availableQuantity,
+        total: item.quantity,
+        inMaintenance: item.currentState?.inMaintenance || 0,
+        inSession: item.currentState?.inSession || 0,
+        rented: item.currentState?.rented || 0
+      },
+      transactions: grouped
+    });
+  } catch (error) {
+    console.error('Error getting grouped transactions:', error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};
+
+
 module.exports = {
   getItems,
   getItemById,
@@ -411,5 +839,7 @@ module.exports = {
   deleteItem,
   getItemByBarcode,
   createItemTransaction,
-  getLowStockItems
+  getLowStockItems,
+  createEnhancedTransaction,
+  getItemTransactionsGrouped
 };

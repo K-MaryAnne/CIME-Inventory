@@ -55,68 +55,156 @@ setTimeout(fixAllQuickButtons, 500);
 
 
 function setupQuickTransactionButtons() {
-    console.log("Setting up quick transaction buttons");
-    
-    // Check In button
+  console.log("Setting up quick transaction buttons");
+  
+  // Replace the existing button setup with category-aware buttons
+  
+  // Function to update transaction buttons based on item category and status
+  function updateTransactionButtonsForItem(item) {
+    console.log('Updating transaction buttons for item:', item);
+    // Get references to buttons
     const checkInBtn = document.getElementById('checkInBtn');
-    if (checkInBtn) {
-      checkInBtn.addEventListener('click', function() {
-        console.log('Check-in button clicked');
-        if (currentItemId) {
-          openQuickTransactionModal('Check-in');
-        } else {
-          showAlert('Please scan an item first', 'warning');
-        }
-      });
-    } else {
-      console.error('Check-in button not found in the DOM');
-    }
-    
-    // Check Out button
     const checkOutBtn = document.getElementById('checkOutBtn');
-    if (checkOutBtn) {
-      checkOutBtn.addEventListener('click', function() {
-        console.log('Check-out button clicked');
-        if (currentItemId) {
-          openQuickTransactionModal('Check-out');
-        } else {
-          showAlert('Please scan an item first', 'warning');
-        }
-      });
-    }
-    
-    // Maintenance button
     const maintenanceBtn = document.getElementById('maintenanceBtn');
-    if (maintenanceBtn) {
-      maintenanceBtn.addEventListener('click', function() {
-        console.log('Maintenance button clicked');
-        if (currentItemId) {
-          openQuickTransactionModal('Maintenance');
-        } else {
-          showAlert('Please scan an item first', 'warning');
-        }
-      });
-    }
-    
-    // Restock button
     const restockBtn = document.getElementById('restockBtn');
-    if (restockBtn) {
-      restockBtn.addEventListener('click', function() {
-        console.log('Restock button clicked');
-        if (currentItemId) {
-          openQuickTransactionModal('Restock');
-        } else {
-          showAlert('Please scan an item first', 'warning');
-        }
-      });
+    
+    // Reset all buttons first
+    if (checkInBtn) checkInBtn.disabled = true;
+    if (checkOutBtn) checkOutBtn.disabled = true;
+    if (maintenanceBtn) checkOutBtn.disabled = true;
+    if (restockBtn) restockBtn.disabled = true;
+    
+    // Exit if no item
+    if (!item || !item._id) {
+      currentItemId = null;
+      return;
     }
     
-    // Save Quick Transaction button
-    const saveQuickTransactionBtn = document.getElementById('saveQuickTransactionBtn');
-    if (saveQuickTransactionBtn) {
-      saveQuickTransactionBtn.addEventListener('click', saveQuickTransaction);
+    // Store the current item ID
+    currentItemId = item._id;
+    
+    // Enable/disable buttons based on item category and status
+    if (item.category === 'Consumable') {
+      // For consumables:
+      // - Always allow restocking
+      if (restockBtn) {
+        restockBtn.disabled = false;
+        restockBtn.innerHTML = '<i class="fas fa-boxes"></i><span>Add Stock</span>';
+      }
+      
+      // - Allow check-out if available quantity > 0
+      if (checkOutBtn) {
+        checkOutBtn.disabled = (item.availableQuantity || 0) <= 0;
+        checkOutBtn.innerHTML = '<i class="fas fa-minus"></i><span>Remove Stock</span>';
+      }
+      
+      // - Disable maintenance button for consumables
+      if (maintenanceBtn) {
+        maintenanceBtn.disabled = true;
+      }
+      
+      // - Disable check-in button for consumables (use restock instead)
+      if (checkInBtn) {
+        checkInBtn.disabled = true;
+      }
+    }
+    else {
+      // For equipment (non-consumables):
+      // - Enable maintenance button if there are available items
+      if (maintenanceBtn) {
+        maintenanceBtn.disabled = (item.availableQuantity || 0) <= 0;
+        maintenanceBtn.innerHTML = '<i class="fas fa-tools"></i><span>Send to Maintenance</span>';
+      }
+      
+      // - Allow check-out for sessions if available quantity > 0
+      if (checkOutBtn) {
+        checkOutBtn.disabled = (item.availableQuantity || 0) <= 0;
+        checkOutBtn.innerHTML = '<i class="fas fa-chalkboard-teacher"></i><span>Use in Session</span>';
+      }
+      
+      // - Enable restock button for adding new equipment
+      if (restockBtn) {
+        restockBtn.disabled = false;
+        restockBtn.innerHTML = '<i class="fas fa-boxes"></i><span>Add Stock</span>';
+      }
+      
+      // - Enable check-in button if any items are out (maintenance, session, or rental)
+      const itemsOut = (
+        (item.currentState?.inMaintenance || 0) +
+        (item.currentState?.inSession || 0) +
+        (item.currentState?.rented || 0)
+      );
+      
+      if (checkInBtn) {
+        checkInBtn.disabled = itemsOut <= 0;
+        checkInBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i><span>Return Item</span>';
+      }
     }
   }
+  
+  // Replace button click handlers
+  
+  // Check-in button
+  const checkInBtn = document.getElementById('checkInBtn');
+  if (checkInBtn) {
+    checkInBtn.addEventListener('click', function() {
+      console.log('Check-in button clicked');
+      if (currentItemId) {
+        openQuickTransactionModal('Return');
+      } else {
+        showAlert('Please scan an item first', 'warning');
+      }
+    });
+  }
+  
+  // Check-out button
+  const checkOutBtn = document.getElementById('checkOutBtn');
+  if (checkOutBtn) {
+    checkOutBtn.addEventListener('click', function() {
+      console.log('Check-out button clicked');
+      if (currentItemId) {
+        openQuickTransactionModal('CheckOut');
+      } else {
+        showAlert('Please scan an item first', 'warning');
+      }
+    });
+  }
+  
+  // Maintenance button
+  const maintenanceBtn = document.getElementById('maintenanceBtn');
+  if (maintenanceBtn) {
+    maintenanceBtn.addEventListener('click', function() {
+      console.log('Maintenance button clicked');
+      if (currentItemId) {
+        openQuickTransactionModal('Maintenance');
+      } else {
+        showAlert('Please scan an item first', 'warning');
+      }
+    });
+  }
+  
+  // Restock button
+  const restockBtn = document.getElementById('restockBtn');
+  if (restockBtn) {
+    restockBtn.addEventListener('click', function() {
+      console.log('Restock button clicked');
+      if (currentItemId) {
+        openQuickTransactionModal('Restock');
+      } else {
+        showAlert('Please scan an item first', 'warning');
+      }
+    });
+  }
+  
+  // Save Quick Transaction button
+  const saveQuickTransactionBtn = document.getElementById('saveQuickTransactionBtn');
+  if (saveQuickTransactionBtn) {
+    saveQuickTransactionBtn.addEventListener('click', saveQuickTransaction);
+  }
+  
+  // Expose the update function
+  window.updateTransactionButtonsForItem = updateTransactionButtonsForItem;
+}
 
 
 
@@ -391,58 +479,83 @@ function displayItemDetails(item) {
         location += ` → ${item.location.shelf.name}`;
       }
     }
+
+      // Get state information
+  const availableQuantity = item.availableQuantity !== undefined ? 
+  item.availableQuantity : item.quantity;
+
+const inMaintenanceCount = item.currentState?.inMaintenance || 0;
+const inSessionCount = item.currentState?.inSession || 0;
+const rentedCount = item.currentState?.rented || 0;
     
     // Create HTML for item details with improved structure
     const detailsHtml = `
-      <div class="row">
-        <div class="col-md-4 text-center mb-3 mb-md-0">
-          ${item.barcode ? `
-            <div class="mb-2" id="barcodeDisplay">
-              <!-- Barcode will be rendered here -->
-            </div>
-            <div class="font-monospace small">${item.barcode}</div>
-            <div class="small text-muted">${item.barcodeType === 'existing' ? 'Manufacturer Barcode' : 'Generated Barcode'}</div>
-          ` : '<div class="text-muted">No barcode</div>'}
-        </div>
-        <div class="col-md-8">
-          <h5 class="item-name mb-3">${item.name}</h5>
-          <div class="mb-3">
-            <span class="${getStatusBadgeClass(item.status)}">${item.status}</span>
-            <span class="badge bg-secondary ms-2">${item.category}</span>
+    <div class="row">
+      <div class="col-md-4 text-center mb-3 mb-md-0">
+        ${item.barcode ? `
+          <div class="mb-2" id="barcodeDisplay">
+            <!-- Barcode will be rendered here -->
           </div>
-          
-          <div class="detail-row">
-            <div class="detail-label">Quantity:</div>
-            <div class="detail-value">
-              <span class="${item.quantity <= item.reorderLevel ? 'text-danger fw-bold' : ''}">${item.quantity} ${item.unit}</span>
-              ${item.quantity <= item.reorderLevel ? '<span class="badge bg-danger ms-2">Low Stock</span>' : ''}
-            </div>
-          </div>
-          
-          <div class="detail-row">
-            <div class="detail-label">Location:</div>
-            <div class="detail-value">${location}</div>
-          </div>
-          
-          <div class="detail-row">
-            <div class="detail-label">Serial Number:</div>
-            <div class="detail-value">${item.serialNumber || 'N/A'}</div>
-          </div>
-          
-          <div class="detail-row">
-            <div class="detail-label">Unit Cost:</div>
-            <div class="detail-value">${formatCurrency(item.unitCost)}</div>
-          </div>
-          
-          ${item.description ? `
-            <div class="mt-3">
-              <div class="detail-label mb-1">Description:</div>
-              <p class="small">${item.description}</p>
-            </div>
-          ` : ''}
-        </div>
+          <div class="font-monospace small">${item.barcode}</div>
+          <div class="small text-muted">${item.barcodeType === 'existing' ? 'Manufacturer Barcode' : 'Generated Barcode'}</div>
+        ` : '<div class="text-muted">No barcode</div>'}
       </div>
-    `;
+      <div class="col-md-8">
+        <h5 class="item-name mb-3">${item.name}</h5>
+        <div class="mb-3">
+          <span class="${getStatusBadgeClass(item.status)}">${item.status}</span>
+          <span class="badge bg-secondary ms-2">${item.category}</span>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label">Total Quantity:</div>
+          <div class="detail-value">
+            ${item.quantity} ${item.unit}
+            ${item.quantity <= item.reorderLevel ? '<span class="badge bg-danger ms-2">Low Stock</span>' : ''}
+          </div>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label">Available:</div>
+          <div class="detail-value">${availableQuantity} ${item.unit}</div>
+        </div>
+        
+        ${item.category !== 'Consumable' ? `
+          <div class="detail-row">
+            <div class="detail-label">Item Status:</div>
+            <div class="detail-value">
+              ${inMaintenanceCount > 0 ? `<span class="badge bg-info me-1">${inMaintenanceCount} in maintenance</span>` : ''}
+              ${inSessionCount > 0 ? `<span class="badge bg-warning me-1">${inSessionCount} in use</span>` : ''}
+              ${rentedCount > 0 ? `<span class="badge bg-primary me-1">${rentedCount} rented</span>` : ''}
+              ${inMaintenanceCount + inSessionCount + rentedCount === 0 ? 'All items available' : ''}
+            </div>
+          </div>
+        ` : ''}
+        
+        <div class="detail-row">
+          <div class="detail-label">Location:</div>
+          <div class="detail-value">${location}</div>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label">Serial Number:</div>
+          <div class="detail-value">${item.akuNo || 'N/A'}</div>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label">Unit Cost:</div>
+          <div class="detail-value">${formatCurrency(item.unitCost)}</div>
+        </div>
+        
+        ${item.description ? `
+          <div class="mt-3">
+            <div class="detail-label mb-1">Description:</div>
+            <p class="small">${item.description}</p>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
     
     // Update item details
     document.getElementById('itemDetails').innerHTML = detailsHtml;
@@ -479,6 +592,7 @@ function displayItemDetails(item) {
     
     // Enable quick transaction buttons
     enableQuickTransactionButtons(item.status);
+    updateTransactionButtonsForItem(item);
   } // End of displayItemDetails function
   
   // Play beep sound for successful scan - PROPERLY PLACED AS A SEPARATE FUNCTION
@@ -902,113 +1016,215 @@ async function saveTransaction() {
 
 // Open quick transaction modal for Check-in, Check-out, etc.
 function openQuickTransactionModal(type) {
-    console.log(`Opening quick transaction modal for ${type}`);
-    
-    if (!currentItemId) {
-      console.error('No current item ID');
-      showAlert('Please scan an item first', 'warning');
-      return;
-    }
-    
-    const modal = document.getElementById('quickTransactionModal');
-    if (!modal) {
-      console.error('Quick transaction modal not found in the DOM!');
-      showAlert('Quick transaction feature is not properly set up', 'danger');
-      return;
-    }
-    
-    const item = document.querySelector('#itemDetails h5') ? 
-                 document.querySelector('#itemDetails h5').textContent : 
-                 'Unknown Item';
-    
-    // Reset form and alerts
-    const form = document.getElementById('quickTransactionForm');
-    if (form) {
-      form.reset();
-    }
-    
-    const alertsContainer = document.getElementById('quickTransactionAlerts');
-    if (alertsContainer) {
-      alertsContainer.innerHTML = '';
-    }
-    
-    // Set modal title
-    const title = document.getElementById('quickTransactionTitle');
-    if (title) {
-      title.textContent = `Quick ${type}`;
-    }
-    
-    // Set form values
-    document.getElementById('quickTransactionItemId').value = currentItemId;
-    document.getElementById('quickTransactionItem').value = item;
-    document.getElementById('quickTransactionType').value = type;
-    
-    // Set badge color and text
-    const badge = document.getElementById('quickTransactionTypeBadge');
-    if (badge) {
-      badge.textContent = type;
-      
-      switch (type) {
-        case 'Check-in':
-          badge.className = 'badge bg-success mb-2';
-          break;
-        case 'Check-out':
-          badge.className = 'badge bg-warning mb-2';
-          break;
-        case 'Maintenance':
-          badge.className = 'badge bg-info mb-2';
-          break;
-        case 'Restock':
-          badge.className = 'badge bg-primary mb-2';
-          break;
-      }
-    }
-    
-    // Show/hide location groups based on transaction type
-    const fromLocationGroup = document.getElementById('quickFromLocationGroup');
-    const toLocationGroup = document.getElementById('quickToLocationGroup');
-    
-    if (fromLocationGroup && toLocationGroup) {
-      switch (type) {
-        case 'Check-in':
-          fromLocationGroup.style.display = 'block';
-          toLocationGroup.style.display = 'none';
-          break;
-        case 'Check-out':
-          fromLocationGroup.style.display = 'none';
-          toLocationGroup.style.display = 'block';
-          break;
-        case 'Maintenance':
-          fromLocationGroup.style.display = 'none';
-          toLocationGroup.style.display = 'none';
-          break;
-        case 'Restock':
-          fromLocationGroup.style.display = 'block';
-          toLocationGroup.style.display = 'block';
-          break;
-      }
-    }
-    
-    // Populate location dropdowns
-    populateQuickTransactionLocations();
-    
-    // Open the modal
-    try {
-      const bsModal = new bootstrap.Modal(modal);
-      bsModal.show();
-      
-      // Focus on quantity field
-      setTimeout(() => {
-        const quantityField = document.getElementById('quickTransactionQuantity');
-        if (quantityField) {
-          quantityField.focus();
-        }
-      }, 300);
-    } catch (error) {
-      console.error('Error showing modal:', error);
-      showAlert('Error showing transaction modal. Please try again.', 'danger');
-    }
+  console.log(`Opening quick transaction modal for ${type}`);
+  
+  if (!currentItemId) {
+    console.error('No current item ID');
+    showAlert('Please scan an item first', 'warning');
+    return;
   }
+  
+  // Fetch the current item data to ensure we have the most up-to-date information
+  fetchWithAuth(`${API_URL}/items/${currentItemId}`)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to fetch item');
+      }
+      return response.json();
+    })
+    .then(item => {
+      const modal = document.getElementById('quickTransactionModal');
+      if (!modal) {
+        console.error('Quick transaction modal not found in the DOM!');
+        showAlert('Quick transaction feature is not properly set up', 'danger');
+        return;
+      }
+      
+      // Reset form and alerts
+      const form = document.getElementById('quickTransactionForm');
+      if (form) {
+        form.reset();
+      }
+      
+      const alertsContainer = document.getElementById('quickTransactionAlerts');
+      if (alertsContainer) {
+        alertsContainer.innerHTML = '';
+      }
+      
+      // Prepare transaction data based on item and type
+      let transactionType = '';
+      let badge = '';
+      let title = '';
+      let showFromLocation = false;
+      let showToLocation = false;
+      let showSessionFields = false;
+      let showRentalFields = false;
+      let showMaintenanceFields = false;
+      let maxQuantity = 0;
+      let defaultQuantity = 1;
+      let quantityLabel = 'Quantity';
+      
+      // Prepare values for each transaction type
+      if (type === 'Return') {
+        // Configure for return/check-in
+        const itemsOut = (
+          (item.currentState?.inMaintenance || 0) +
+          (item.currentState?.inSession || 0) +
+          (item.currentState?.rented || 0)
+        );
+        
+        // Default to most appropriate return type
+        if (item.currentState?.inMaintenance > 0) {
+          transactionType = 'Return from Maintenance';
+          badge = 'bg-info';
+          title = 'Return from Maintenance';
+          showMaintenanceFields = true;
+          maxQuantity = item.currentState.inMaintenance;
+        } else if (item.currentState?.inSession > 0) {
+          transactionType = 'Return from Session';
+          badge = 'bg-warning';
+          title = 'Return from Session';
+          showSessionFields = true;
+          maxQuantity = item.currentState.inSession;
+        } else if (item.currentState?.rented > 0) {
+          transactionType = 'Return from Rental';
+          badge = 'bg-primary';
+          title = 'Return from Rental';
+          showRentalFields = true;
+          maxQuantity = item.currentState.rented;
+        } else {
+          // Fallback to generic check-in
+          transactionType = 'Check-in';
+          badge = 'bg-success';
+          title = 'Return Item';
+          showFromLocation = true;
+          maxQuantity = item.quantity - (item.availableQuantity || 0);
+        }
+        
+        quantityLabel = 'Return Quantity';
+      } 
+      else if (type === 'CheckOut') {
+        // Configure for check-out
+        if (item.category === 'Consumable') {
+          transactionType = 'Stock Removal';
+          badge = 'bg-warning';
+          title = 'Remove Stock';
+          maxQuantity = item.availableQuantity || item.quantity;
+          quantityLabel = 'Remove Quantity';
+        } else {
+          // For equipment, default to session check-out
+          transactionType = 'Check Out for Session';
+          badge = 'bg-warning';
+          title = 'Use in Session';
+          showSessionFields = true;
+          showToLocation = true;
+          maxQuantity = item.availableQuantity || item.quantity;
+          quantityLabel = 'Quantity for Session';
+        }
+      }
+      else if (type === 'Maintenance') {
+        // Configure for maintenance
+        transactionType = 'Send to Maintenance';
+        badge = 'bg-info';
+        title = 'Send to Maintenance';
+        showMaintenanceFields = true;
+        maxQuantity = item.availableQuantity || item.quantity;
+        quantityLabel = 'Quantity for Maintenance';
+      }
+      else if (type === 'Restock') {
+        // Configure for restock
+        transactionType = 'Stock Addition';
+        badge = 'bg-success';
+        title = 'Add Stock';
+        maxQuantity = 9999; // No real limit on adding stock
+        defaultQuantity = 10; // Default to adding 10 for restocking
+        quantityLabel = 'Add Quantity';
+      }
+      
+      // Set modal title
+      const modalTitle = document.getElementById('quickTransactionTitle');
+      if (modalTitle) {
+        modalTitle.textContent = title;
+      }
+      
+      // Set form values
+      document.getElementById('quickTransactionItemId').value = item._id;
+      document.getElementById('quickTransactionItem').value = item.name;
+      document.getElementById('quickTransactionType').value = transactionType;
+      
+      // Set quantity default and max
+      const quantityField = document.getElementById('quickTransactionQuantity');
+      if (quantityField) {
+        quantityField.value = defaultQuantity;
+        quantityField.max = maxQuantity;
+        
+        // Update the label
+        const quantityLabel = document.querySelector('label[for="quickTransactionQuantity"]');
+        if (quantityLabel) {
+          quantityLabel.textContent = `${quantityLabel}*`;
+        }
+      }
+      
+      // Set badge
+      const badgeEl = document.getElementById('quickTransactionTypeBadge');
+      if (badgeEl) {
+        badgeEl.textContent = title;
+        badgeEl.className = `badge ${badge} mb-2`;
+      }
+      
+      // Show/hide fields based on transaction type
+      const fromLocationGroup = document.getElementById('quickFromLocationGroup');
+      const toLocationGroup = document.getElementById('quickToLocationGroup');
+      const sessionFieldsGroup = document.getElementById('quickSessionGroup');
+      const rentalFieldsGroup = document.getElementById('quickRentalGroup');
+      const maintenanceFieldsGroup = document.getElementById('quickMaintenanceGroup');
+      
+      if (fromLocationGroup) {
+        fromLocationGroup.style.display = showFromLocation ? 'block' : 'none';
+      }
+      
+      if (toLocationGroup) {
+        toLocationGroup.style.display = showToLocation ? 'block' : 'none';
+      }
+      
+      if (sessionFieldsGroup) {
+        sessionFieldsGroup.style.display = showSessionFields ? 'block' : 'none';
+      }
+      
+      if (rentalFieldsGroup) {
+        rentalFieldsGroup.style.display = showRentalFields ? 'block' : 'none';
+      }
+      
+      if (maintenanceFieldsGroup) {
+        maintenanceFieldsGroup.style.display = showMaintenanceFields ? 'block' : 'none';
+      }
+      
+      // Populate location dropdowns
+      populateQuickTransactionLocations();
+      
+      // Open the modal
+      try {
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+        
+        // Focus on quantity field
+        setTimeout(() => {
+          const quantityField = document.getElementById('quickTransactionQuantity');
+          if (quantityField) {
+            quantityField.focus();
+          }
+        }, 300);
+      } catch (error) {
+        console.error('Error showing modal:', error);
+        showAlert('Error showing transaction modal. Please try again.', 'danger');
+      }
+    })
+    .catch(error => {
+      console.error('Error fetching item for transaction:', error);
+      showAlert('Error preparing transaction. Please try again.', 'danger');
+    });
+}
+
 
 
   // Save quick transaction
@@ -1030,49 +1246,78 @@ function openQuickTransactionModal(type) {
       const itemId = document.getElementById('quickTransactionItemId').value;
       const type = document.getElementById('quickTransactionType').value;
       const quantity = document.getElementById('quickTransactionQuantity').value;
-      const fromLocation = document.getElementById('quickFromLocation') ? 
-                           document.getElementById('quickFromLocation').value : '';
-      const toLocation = document.getElementById('quickToLocation') ? 
-                         document.getElementById('quickToLocation').value : '';
-      const notes = document.getElementById('quickTransactionNotes') ? 
-                   document.getElementById('quickTransactionNotes').value : '';
       
-      // Validate required fields
-      if (!type || !quantity) {
-        showAlert('Please fill in all required fields', 'danger', 'quickTransactionAlerts', false);
-        return;
-      }
-      
-      // Validate location fields based on transaction type
-      if (type === 'Check-in' && !fromLocation) {
-        showAlert('Please select the location the item is coming from', 'warning', 'quickTransactionAlerts', false);
-        return;
-      }
-      
-      if (type === 'Check-out' && !toLocation) {
-        showAlert('Please select the location the item is going to', 'warning', 'quickTransactionAlerts', false);
-        return;
-      }
-      
-      if (type === 'Restock' && (!fromLocation || !toLocation)) {
-        showAlert('Please select both from and to locations for restock', 'warning', 'quickTransactionAlerts', false);
-        return;
-      }
-      
-      // Prepare transaction data
+      // Gather all possible form fields (we'll only send the relevant ones)
       const transactionData = {
         type,
-        quantity: parseInt(quantity),
-        notes
+        quantity: parseInt(quantity)
       };
       
-      // Add locations based on transaction type
-      if (fromLocation) {
-        transactionData.fromLocation = fromLocation;
+    // Get form fields based on transaction type
+if (document.getElementById('quickFromLocation') && 
+document.getElementById('quickFromLocation').parentElement.style.display !== 'none' &&
+document.getElementById('quickFromLocation').value !== '') {  // Check for empty value
+transactionData.fromLocation = document.getElementById('quickFromLocation').value;
+}
+
+if (document.getElementById('quickToLocation') && 
+document.getElementById('quickToLocation').parentElement.style.display !== 'none' &&
+document.getElementById('quickToLocation').value !== '') {  // Check for empty value
+transactionData.toLocation = document.getElementById('quickToLocation').value;
+}
+      
+      // Session fields
+      if (document.getElementById('quickSessionGroup') && 
+          document.getElementById('quickSessionGroup').style.display !== 'none') {
+        const sessionName = document.getElementById('quickSessionName')?.value;
+        const sessionLocation = document.getElementById('quickSessionLocation')?.value;
+        
+        if (sessionName || sessionLocation) {
+          transactionData.session = {
+            name: sessionName,
+            location: sessionLocation
+          };
+        }
       }
       
-      if (toLocation) {
-        transactionData.toLocation = toLocation;
+      // Rental fields
+      if (document.getElementById('quickRentalGroup') && 
+          document.getElementById('quickRentalGroup').style.display !== 'none') {
+        const rentedTo = document.getElementById('quickRentedTo')?.value;
+        const expectedReturnDate = document.getElementById('quickExpectedReturnDate')?.value;
+        
+        if (rentedTo) {
+          transactionData.rental = {
+            rentedTo,
+            expectedReturnDate
+          };
+        }
+      }
+      
+      // Maintenance fields
+      if (document.getElementById('quickMaintenanceGroup') && 
+          document.getElementById('quickMaintenanceGroup').style.display !== 'none') {
+        const provider = document.getElementById('quickMaintenanceProvider')?.value;
+        const expectedEndDate = document.getElementById('quickExpectedEndDate')?.value;
+        
+        if (provider || expectedEndDate) {
+          transactionData.maintenance = {
+            provider,
+            expectedEndDate
+          };
+        }
+      }
+      
+      // Get notes
+      const notes = document.getElementById('quickTransactionNotes')?.value;
+      if (notes) {
+        transactionData.notes = notes;
+      }
+      
+      // Validate required fields
+      if (!type || !quantity || parseInt(quantity) <= 0) {
+        showAlert('Please specify a valid quantity', 'danger', 'quickTransactionAlerts', false);
+        return;
       }
       
       // Show loading state
@@ -1082,8 +1327,8 @@ function openQuickTransactionModal(type) {
         saveBtn.disabled = true;
       }
       
-      // Create transaction
-      const response = await fetchWithAuth(`${API_URL}/items/${itemId}/transaction`, {
+      // Create transaction using enhanced endpoint
+      const response = await fetchWithAuth(`${API_URL}/items/${itemId}/enhanced-transaction`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1119,7 +1364,7 @@ function openQuickTransactionModal(type) {
         playSuccessSound();
         
         // Show success message with more details
-        showAlert(`Quick transaction complete: ${transaction.type} of ${transaction.quantity} units`, 'success');
+        showAlert(`Transaction complete: ${transaction.type} of ${transaction.quantity} ${transaction.item ? 'units' : 'items'}`, 'success');
         
         // Reload item details
         const barcodeInput = document.getElementById('barcodeInput');

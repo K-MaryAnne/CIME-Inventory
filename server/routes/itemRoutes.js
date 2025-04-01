@@ -9,7 +9,9 @@ const {
   deleteItem,
   getItemByBarcode,
   createItemTransaction,
-  getLowStockItems
+  getLowStockItems,
+  createEnhancedTransaction,
+  getItemTransactionsGrouped
 } = require('../controllers/itemController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -57,6 +59,27 @@ router.post(
   '/:id/transaction', 
   protect, 
   createItemTransaction
+);
+
+// Create enhanced transaction for an item
+router.post(
+  '/:id/enhanced-transaction', 
+  protect, 
+  createEnhancedTransaction
+);
+
+// Keep original transaction endpoint for backward compatibility
+router.post(
+  '/:id/transaction', 
+  protect, 
+  createEnhancedTransaction // Use the enhanced handler for both endpoints
+);
+
+// Get grouped transactions for an item
+router.get(
+  '/:id/transactions/grouped',
+  protect,
+  getItemTransactionsGrouped
 );
 
 module.exports = router;
