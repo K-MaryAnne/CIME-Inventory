@@ -1,6 +1,49 @@
 // server/routes/itemRoutes.js
 const express = require('express');
 const router = express.Router();
+
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Multer storage configuration
+const storage = multer.diskStorage({
+  destination: function(req, file, cb) {
+    const uploadDir = path.join(__dirname, '../uploads');
+    
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    
+    cb(null, uploadDir);
+  },
+  filename: function(req, file, cb) {
+    const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, uniqueName + ext);
+  }
+});
+
+// File filter function - ADD THIS
+const fileFilter = (req, file, cb) => {
+  // Accept images only
+  if (file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only image files are allowed!'), false);
+  }
+};
+
+// Multer upload configuration
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB max file size
+  }
+});
+
 const { 
   getItems,
   getItemById,
@@ -11,7 +54,7 @@ const {
   createItemTransaction,
   getLowStockItems,
   createEnhancedTransaction,
-  getItemTransactionsGrouped
+  getItemTransactionsGrouped,
 } = require('../controllers/itemController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -38,7 +81,7 @@ router.get('/barcode/:code', protect, getItemByBarcode);
 // Health check endpoint
 router.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok' });
-  });
+});
 
 // Get, update and delete item by ID
 router.route('/:id')
@@ -54,13 +97,6 @@ router.route('/:id')
     deleteItem
   );
 
-// Create transaction for an item
-router.post(
-  '/:id/transaction', 
-  protect, 
-  createItemTransaction
-);
-
 // Create enhanced transaction for an item
 router.post(
   '/:id/enhanced-transaction', 
@@ -68,11 +104,11 @@ router.post(
   createEnhancedTransaction
 );
 
-// Keep original transaction endpoint for backward compatibility
+// Create transaction for an item (using enhanced handler)
 router.post(
   '/:id/transaction', 
   protect, 
-  createEnhancedTransaction // Use the enhanced handler for both endpoints
+  createEnhancedTransaction
 );
 
 // Get grouped transactions for an item

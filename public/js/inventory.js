@@ -14,6 +14,9 @@ let activeScannerTargetId = null;
 let transactionItemData = null;
 let generatedBarcode = null;
 
+// let itemImageChanged = false;
+// let currentItemHasImage = false;
+
 
 // Handle view button clicks
 document.addEventListener('click', function(e) {
@@ -41,113 +44,7 @@ document.addEventListener('click', function(e) {
   
 
 
-document.addEventListener('DOMContentLoaded', () => {
-  // Check if user is logged in
-  const token = getAuthToken();
-  const user = getCurrentUser();
-  
-  if (!token || !user) {
-    window.location.href = '../index.html';
-    return;
-  }
 
-    addModalFixStyles();
-    // setupTransactionButtons();
-    // fixTransactionModal();
-    setupEnhancedTransactions();
-  
-  // Setup event listeners
-  setupEventListeners();
-
-  setupBarcodeEventListeners();
-
-  setupBarcodeChangeListeners();
-
-
-  // Fix modal accessibility issues
-  fixModalAccessibilityIssues();
-
-    
-  // Fix transaction modal issues
-  // fixTransactionModal();
-  
-  // Make sure Save Item button has event listener attached
-  const saveItemBtn = document.getElementById('saveItemBtn');
-  if (saveItemBtn) {
-    // Remove any existing event listeners to avoid duplicates
-    const newSaveBtn = saveItemBtn.cloneNode(true);
-    saveItemBtn.parentNode.replaceChild(newSaveBtn, saveItemBtn);
-    
-    // Add new event listener
-    newSaveBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      console.log('Save button clicked');
-      saveItem();
-    });
-  }
-
-  
-  // Show/hide manager/admin features based on user role
-  if (isInventoryManager()) {
-    document.querySelectorAll('.manager-only').forEach(el => el.classList.remove('d-none'));
-  }
-  
-  if (isAdmin()) {
-    document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('d-none'));
-  }
-  
-  // Update user info
-  document.getElementById('userName').textContent = user.name;
-  document.getElementById('profileName').value = user.name;
-  document.getElementById('profileEmail').value = user.email;
-  document.getElementById('profileRole').value = user.role;
-  
-  // Initialize the inventory
-  initializeInventory();
-  
-  // Load locations and suppliers for the form
-  loadLocationsAndSuppliers();
-
-
-  // Auto-focus the barcode lookup field
-  const quickBarcodeSearch = document.getElementById('quickBarcodeSearch');
-  if (quickBarcodeSearch) {
-    setTimeout(() => {
-      quickBarcodeSearch.focus();
-    }, 500);
-  }
-  
-  // Look for the 'addItem' hash fragment to automatically open Add Item modal
-  if (window.location.hash === '#addItem') {
-    document.getElementById('addItemBtn').click();
-  }
-
-
-
-  function fixModalAccessibilityIssues() {
-    // When any modal is hidden, properly clean up ARIA attributes
-    document.body.addEventListener('hidden.bs.modal', function(event) {
-      // Reset focus to body
-      document.body.focus();
-      
-      // Remove aria-hidden from all elements
-      document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
-        el.removeAttribute('aria-hidden');
-      });
-      
-      // Clear any remaining modal-related classes and styles
-      document.body.classList.remove('modal-open');
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
-      
-      // Remove any leftover backdrops
-      document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
-        backdrop.remove();
-      });
-    }, true);
-  }
-
-});
 
 
 // Add CSS fix for modal z-index issues
@@ -307,6 +204,418 @@ async function loadLowStockItems() {
   }
 }
 
+
+
+
+
+
+
+
+
+function setupImageHandling() {
+  console.log('Setting up image handling');
+  
+  // Preview image when a file is selected
+  const imageFileInput = document.getElementById('itemImageFile');
+  if (imageFileInput) {
+    imageFileInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        previewImage(file);
+        imageUploadChanged = true;
+      }
+    });
+  }
+  
+  // Upload image button
+  const uploadBtn = document.getElementById('uploadImageBtn');
+  if (uploadBtn) {
+    uploadBtn.addEventListener('click', function() {
+      const fileInput = document.getElementById('itemImageFile');
+      if (fileInput.files.length > 0) {
+        uploadItemImage(fileInput.files[0]);
+      } else {
+        showAlert('Please select an image file first', 'warning', 'itemModalAlerts');
+      }
+    });
+  }
+  
+  // Remove image button
+  const removeBtn = document.getElementById('removeImageBtn');
+  if (removeBtn) {
+    removeBtn.addEventListener('click', function() {
+      if (confirm('Are you sure you want to remove the current image?')) {
+        removeItemImage();
+      }
+    });
+  }
+}
+
+// Preview an image file
+function previewImage(file) {
+  const reader = new FileReader();
+  
+  reader.onload = function(e) {
+    const previewContainer = document.getElementById('itemImagePreview');
+    previewContainer.innerHTML = `
+      <div class="image-preview">
+        <img src="${e.target.result}" alt="Preview">
+      </div>
+    `;
+  };
+  
+  reader.onerror = function() {
+    showAlert('Error reading image file', 'danger', 'itemModalAlerts');
+  };
+  
+  reader.readAsDataURL(file);
+}
+
+// Upload image to server
+async function uploadItemImage(file) {
+  const itemId = document.getElementById('itemId').value;
+  if (!itemId) {
+    showAlert('Please save the item first before uploading an image', 'warning', 'itemModalAlerts');
+    return;
+  }
+  
+  // Validate file
+  if (!file.type.startsWith('image/')) {
+    showAlert('Please select a valid image file', 'danger', 'itemModalAlerts');
+    return;
+  }
+  
+  if (file.size > 5 * 1024 * 1024) { // 5MB
+    showAlert('Image file is too large. Maximum size is 5MB', 'danger', 'itemModalAlerts');
+    return;
+  }
+  
+  // Create form data
+  const formData = new FormData();
+  formData.append('image', file);
+  
+  // Show loading
+  const uploadBtn = document.getElementById('uploadImageBtn');
+  const originalBtnText = uploadBtn.innerHTML;
+  uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Uploading...';
+  uploadBtn.disabled = true;
+  
+  // Show status
+  const statusDiv = document.getElementById('imageUploadStatus');
+  statusDiv.innerHTML = '<div class="text-info">Uploading image...</div>';
+  
+  try {
+    const response = await fetchWithAuth(`${API_URL}/items/${itemId}/image`, {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to upload image');
+    }
+    
+    const data = await response.json();
+    
+    // Update UI
+    showAlert('Image uploaded successfully', 'success', 'itemModalAlerts');
+    statusDiv.innerHTML = '<div class="text-success">Upload successful!</div>';
+    
+    // Reset file input but keep preview
+    document.getElementById('itemImageFile').value = '';
+    
+    // Set flag that we have an image
+    currentItemImageExists = true;
+    imageUploadChanged = false;
+    
+    // Hide status after 3 seconds
+    setTimeout(() => {
+      statusDiv.innerHTML = '';
+    }, 3000);
+    
+  } catch (error) {
+    console.error('Upload error:', error);
+    showAlert('Failed to upload image: ' + error.message, 'danger', 'itemModalAlerts');
+    statusDiv.innerHTML = '<div class="text-danger">Upload failed!</div>';
+  } finally {
+    // Reset button
+    uploadBtn.innerHTML = originalBtnText;
+    uploadBtn.disabled = false;
+  }
+}
+
+// Load an item's image
+// Replace your existing loadItemImage function with this:
+function loadItemImage(itemId) {
+  if (!itemId) return;
+  
+  const imgContainer = document.getElementById('itemImagePreview');
+  
+  // Set loading placeholder
+  imgContainer.innerHTML = `
+    <div class="image-placeholder">
+      <span class="spinner-border spinner-border-sm"></span>
+      <p>Loading image...</p>
+    </div>
+  `;
+  
+  // Use fetchWithAuth to properly handle authentication
+  fetchWithAuth(`${API_URL}/items/${itemId}/image`)
+    .then(response => {
+      if (response && response.ok) {
+        // Image exists, create image URL with auth token
+        const token = getAuthToken();
+        const imageUrl = `${API_URL}/items/${itemId}/image?token=${token}&t=${Date.now()}`;
+        
+        imgContainer.innerHTML = `
+          <div class="image-preview">
+            <img src="${imageUrl}" alt="Item image" onload="this.style.opacity=1" style="opacity:0; transition: opacity 0.3s;">
+          </div>
+        `;
+        currentItemImageExists = true;
+      } else {
+        // No image or error
+        imgContainer.innerHTML = `
+          <div class="image-placeholder">
+            <i class="fas fa-image"></i>
+            <p>No image available</p>
+          </div>
+        `;
+        currentItemImageExists = false;
+      }
+    })
+    .catch(error => {
+      console.error('Error loading image:', error);
+      imgContainer.innerHTML = `
+        <div class="image-placeholder">
+          <i class="fas fa-exclamation-circle"></i>
+          <p>Error loading image</p>
+        </div>
+      `;
+      currentItemImageExists = false;
+    });
+}
+
+// Remove an item's image
+// Image handling functions - FIXED VERSION
+
+// Global variables for image handling
+let imageUploadChanged = false;  // Changed name to avoid conflicts
+let currentItemImageExists = false;  // Changed name to avoid conflicts
+
+// Initialize image handling
+function setupImageHandling() {
+  console.log('Setting up image handling');
+  
+  // Preview image when a file is selected
+  const imageFileInput = document.getElementById('itemImageFile');
+  if (imageFileInput) {
+    imageFileInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        previewImage(file);
+        imageUploadChanged = true;
+      }
+    });
+  }
+  
+  // Upload image button
+  const uploadBtn = document.getElementById('uploadImageBtn');
+  if (uploadBtn) {
+    uploadBtn.addEventListener('click', function() {
+      const fileInput = document.getElementById('itemImageFile');
+      if (fileInput.files.length > 0) {
+        uploadItemImage(fileInput.files[0]);
+      } else {
+        showAlert('Please select an image file first', 'warning', 'itemModalAlerts');
+      }
+    });
+  }
+  
+  // Remove image button
+  const removeBtn = document.getElementById('removeImageBtn');
+  if (removeBtn) {
+    removeBtn.addEventListener('click', function() {
+      if (confirm('Are you sure you want to remove the current image?')) {
+        removeItemImage();
+      }
+    });
+  }
+}
+
+// Preview an image file
+function previewImage(file) {
+  const reader = new FileReader();
+  
+  reader.onload = function(e) {
+    const previewContainer = document.getElementById('itemImagePreview');
+    previewContainer.innerHTML = `
+      <div class="image-preview">
+        <img src="${e.target.result}" alt="Preview">
+      </div>
+    `;
+  };
+  
+  reader.onerror = function() {
+    showAlert('Error reading image file', 'danger', 'itemModalAlerts');
+  };
+  
+  reader.readAsDataURL(file);
+}
+
+// Upload image to server (SIMPLIFIED VERSION FOR TESTING)
+async function uploadItemImage(file) {
+  const itemId = document.getElementById('itemId').value;
+  if (!itemId) {
+    showAlert('Please save the item first before uploading an image', 'warning', 'itemModalAlerts');
+    return;
+  }
+  
+  // Validate file
+  if (!file.type.startsWith('image/')) {
+    showAlert('Please select a valid image file', 'danger', 'itemModalAlerts');
+    return;
+  }
+  
+  if (file.size > 5 * 1024 * 1024) { // 5MB
+    showAlert('Image file is too large. Maximum size is 5MB', 'danger', 'itemModalAlerts');
+    return;
+  }
+  
+  // Create form data
+  const formData = new FormData();
+  formData.append('image', file);
+  
+  // Show loading
+  const uploadBtn = document.getElementById('uploadImageBtn');
+  const originalBtnText = uploadBtn.innerHTML;
+  uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Uploading...';
+  uploadBtn.disabled = true;
+  
+  // Show status
+  const statusDiv = document.getElementById('imageUploadStatus');
+  statusDiv.innerHTML = '<div class="text-info">Uploading image...</div>';
+  
+  try {
+    const response = await fetchWithAuth(`${API_URL}/items/${itemId}/image`, {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to upload image');
+    }
+    
+    const data = await response.json();
+    
+    // Update UI
+    showAlert('Image uploaded successfully', 'success', 'itemModalAlerts');
+    statusDiv.innerHTML = '<div class="text-success">Upload successful!</div>';
+    
+    // Reset file input but keep preview
+    document.getElementById('itemImageFile').value = '';
+    
+    // Set flag that we have an image
+    currentItemImageExists = true;
+    imageUploadChanged = false;
+    
+    // Hide status after 3 seconds
+    setTimeout(() => {
+      statusDiv.innerHTML = '';
+    }, 3000);
+    
+  } catch (error) {
+    console.error('Upload error:', error);
+    showAlert('Failed to upload image: ' + error.message, 'danger', 'itemModalAlerts');
+    statusDiv.innerHTML = '<div class="text-danger">Upload failed!</div>';
+  } finally {
+    // Reset button
+    uploadBtn.innerHTML = originalBtnText;
+    uploadBtn.disabled = false;
+  }
+}
+
+// Load an item's image (SIMPLIFIED VERSION)
+function loadItemImage(itemId) {
+  if (!itemId) return;
+  
+  const imgContainer = document.getElementById('itemImagePreview');
+  
+  // Try to load the image
+  const img = new Image();
+  img.onload = function() {
+    imgContainer.innerHTML = `
+      <div class="image-preview">
+        <img src="${API_URL}/items/${itemId}/image" alt="Item image">
+      </div>
+    `;
+    currentItemImageExists = true;
+  };
+  
+  img.onerror = function() {
+    // No image or error loading
+    imgContainer.innerHTML = `
+      <div class="image-placeholder">
+        <i class="fas fa-image"></i>
+        <p>No image available</p>
+      </div>
+    `;
+    currentItemImageExists = false;
+  };
+  
+  img.src = `${API_URL}/items/${itemId}/image`;
+}
+
+// Remove an item's image
+async function removeItemImage() {
+  const itemId = document.getElementById('itemId').value;
+  if (!itemId) {
+    showAlert('No item selected', 'warning', 'itemModalAlerts');
+    return;
+  }
+  
+  // Show loading
+  const removeBtn = document.getElementById('removeImageBtn');
+  const originalBtnText = removeBtn.innerHTML;
+  removeBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Removing...';
+  removeBtn.disabled = true;
+  
+  try {
+    const response = await fetchWithAuth(`${API_URL}/items/${itemId}/image`, {
+      method: 'DELETE'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to remove image');
+    }
+    
+    // Update UI
+    showAlert('Image removed successfully', 'success', 'itemModalAlerts');
+    
+    // Reset preview
+    document.getElementById('itemImagePreview').innerHTML = `
+      <div class="image-placeholder">
+        <i class="fas fa-image"></i>
+        <p>No image available</p>
+      </div>
+    `;
+    
+    // Reset file input
+    document.getElementById('itemImageFile').value = '';
+    
+    // Update flags
+    currentItemImageExists = false;
+    imageUploadChanged = false;
+  } catch (error) {
+    console.error('Remove image error:', error);
+    showAlert('Failed to remove image: ' + error.message, 'danger', 'itemModalAlerts');
+  } finally {
+    // Reset button
+    removeBtn.innerHTML = originalBtnText;
+    removeBtn.disabled = false;
+  }
+}
 
 
 
@@ -1378,6 +1687,35 @@ function updateInventoryTable(items) {
         </td>
       </tr>
     `;
+
+
+
+      const thumbnailHtml = item.image 
+      ? `<img src="${API_URL}/items/${item._id}/image?thumbnail=true" class="item-thumbnail me-2" alt="${item.name}">`
+      : `<div class="item-thumbnail me-2 d-flex align-items-center justify-content-center bg-light">
+           <i class="fas fa-box text-muted" style="font-size: 0.8rem"></i>
+         </div>`;
+    
+    html += `
+      <tr data-id="${item._id}">
+        <td>
+          <div class="form-check">
+            <input class="form-check-input item-checkbox" type="checkbox" value="${item._id}">
+          </div>
+        </td>
+        <td>
+          <div class="d-flex align-items-center">
+            ${thumbnailHtml}
+            <div>
+              <h6 class="mb-0">${item.name}</h6>
+              <small class="text-muted">${item.akuNo || 'No S/N'}</small>
+            </div>
+          </div>
+        </td>
+        <!-- Rest of your row -->
+      </tr>
+    `;
+    
   });
   
   tableBody.innerHTML = html;
@@ -1655,7 +1993,23 @@ async function loadItemDetails(itemId, isEdit = false) {
 function openItemModal(item, isEdit = false) {
   try {
 
-
+// Reset image change tracking
+  itemImageChanged = false;
+  
+  // Load item image if we have an item ID
+  if (item._id) {
+    loadItemImage(item._id);
+    currentItemHasImage = !!item.image; // Set based on item data
+  } else {
+    // Reset image preview for new items
+    document.getElementById('itemImagePreview').innerHTML = `
+      <div class="image-placeholder">
+        <i class="fas fa-image"></i>
+        <p>No image available</p>
+      </div>
+    `;
+    currentItemHasImage = false;
+  }
 
 
      // Set category and update form fields accordingly
@@ -1927,6 +2281,11 @@ function updateCategoryOptions() {
 
 document.addEventListener('DOMContentLoaded', function() {
   updateCategoryOptions();
+
+  setupImprovedTransactionButtons();
+
+    // Call after page loads
+    setTimeout(replaceTransactionButtons, 500);
   
   // Show/hide custom category field based on selection
   const categorySelect = document.getElementById('itemCategory');
@@ -2120,88 +2479,6 @@ function updateBarcodeFormVisibility() {
 
 
 
-
-
-
-// function to fix transaction modal
-function fixTransactionModal() {
-  console.log('Fixing transaction modal...');
-  
-  // First, check if the modal exists in DOM
-  const transactionModal = document.getElementById('transactionModal');
-  if (!transactionModal) {
-    console.error('Transaction modal element not found in the DOM!');
-    return;
-  }
-  
-  // Clean up any existing modal instances to prevent conflicts
-  const existingModal = bootstrap.Modal.getInstance(transactionModal);
-  if (existingModal) {
-    existingModal.dispose();
-  }
-  
-  // Remove any stray backdrop elements
-  document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
-    backdrop.remove();
-  });
-  
-  // Remove modal-open class from body if present
-  document.body.classList.remove('modal-open');
-  document.body.style.overflow = '';
-  document.body.style.paddingRight = '';
-  
-  // Make sure the modal is visible in DOM
-  transactionModal.style.display = 'block';
-  transactionModal.style.visibility = 'visible';
-  transactionModal.classList.remove('hide');
-  transactionModal.removeAttribute('aria-hidden');
-  
-  // Add dialog centered class for better positioning
-  transactionModal.querySelector('.modal-dialog').classList.add('modal-dialog-centered');
-  
-  // Reattach transaction buttons event listeners
-  document.querySelectorAll('.transaction-btn').forEach(btn => {
-    // Clone and replace to remove old event listeners
-    const newBtn = btn.cloneNode(true);
-    btn.parentNode.replaceChild(newBtn, btn);
-    
-    newBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('Transaction button clicked');
-      
-      const itemId = newBtn.dataset.id;
-      const itemName = newBtn.dataset.name;
-      
-      if (itemId && itemName) {
-        // openTransactionModal(itemId, itemName);
-        fetchItemForTransaction(itemId);
-      }
-    });
-  });
-
-  // Create a fresh modal instance explicitly
-  try {
-    // Create a brand new modal instance
-    const modalInstance = new bootstrap.Modal(transactionModal, {
-      backdrop: true,
-      keyboard: true,
-      focus: true
-    });
-    
-    // Store it for future reference
-    window.currentTransactionModal = modalInstance;
-  } catch (error) {
-    console.error('Error creating modal instance:', error);
-  }
-
-  fixModals();
-}
-
-
-
-
-
 function addModalFixStyles() {
   const style = document.createElement('style');
   style.textContent = `
@@ -2219,51 +2496,10 @@ function addModalFixStyles() {
 
 
 
-// Call this function at the end of your DOMContentLoaded event
-document.addEventListener('DOMContentLoaded', function() {
-  // ... other initialization code ...
-  
-  // // Set up transaction buttons
-  // setupTransactionButtons();
-  
-  // Fix any modals that might have issues
-  fixModals();
-});
 
-// Function to fix potential modal issues
-function fixModals() {
-  // Clean up any stray backdrops or broken modals
-  document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
-    backdrop.remove();
-  });
-  
-  // Remove modal-open class if no modals are actually shown
-  if (!document.querySelector('.modal.show')) {
-    document.body.classList.remove('modal-open');
-    document.body.style.overflow = '';
-    document.body.style.paddingRight = '';
-  }
-  
-  // Fix all modals on the page
-  document.querySelectorAll('.modal').forEach(modal => {
-    // Make sure hidden modals are actually hidden
-    if (!modal.classList.contains('show')) {
-      modal.style.display = 'none';
-    }
-    
-    // Add proper event listeners for hiding
-    modal.addEventListener('hidden.bs.modal', function() {
-      document.body.classList.remove('modal-open');
-      document.body.style.overflow = '';
-      document.body.style.paddingRight = '';
-      
-      // Remove any stray backdrops
-      document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
-        backdrop.remove();
-      });
-    });
-  });
-}
+
+
+
 
 // Add this CSS fix to fix z-index issues
 function addModalCssFix() {
@@ -3057,83 +3293,9 @@ async function loadLocationsForTransaction() {
   }
 }
 
-// Fetch item data before opening transaction modal
-async function fetchItemForTransaction(itemId) {
-  try {
-    // Show loading state
-    showAlert('Loading item data...', 'info', 'alertContainer', true);
-    
-    const response = await fetchWithAuth(`${API_URL}/items/${itemId}`);
-    
-    if (!response || !response.ok) {
-      showAlert('Failed to load item data', 'danger');
-      return;
-    }
-    
-    const item = await response.json();
-    
-    // Store item data for transaction
-    transactionItemData = item;
-    
-    // Show success message
-    showAlert(`Item found: ${item.name}`, 'success');
-    
-    // Now open the modal with our direct method
-    showEnhancedModalDirectly(item);
-  } catch (error) {
-    console.error('Error fetching item for transaction:', error);
-    showAlert('Error loading item data', 'danger');
-  }
-}
 
 
-// Configure transaction type options based on item category and status
-function configureTransactionTypes(item) {
-  const typeSelect = document.getElementById('enhancedTransactionType');
-  if (!typeSelect) return;
-  
-  // Clear existing options
-  typeSelect.innerHTML = '<option value="">Select Transaction Type</option>';
-  
-  // Add relevant transaction types based on category
-  if (item.category === 'Consumable') {
-    // Consumable-specific options
-    typeSelect.innerHTML += `
-      <option value="Stock Addition">Add Stock</option>
-      <option value="Stock Removal">Remove Stock</option>
-    `;
-    
-    // Default to stock addition for consumables
-    typeSelect.value = 'Stock Addition';
-  } else {
-    // Equipment-specific options
-    typeSelect.innerHTML += `
-      <option value="Stock Addition">Add Stock</option>
-      <option value="Stock Removal">Remove Stock</option>
-      <option value="Relocate">Relocate</option>
-      <option value="Check Out for Session">Use in Session</option>
-      <option value="Return from Session">Return from Session</option>
-      <option value="Rent Out">Rent Out</option>
-      <option value="Return from Rental">Return from Rental</option>
-      <option value="Send to Maintenance">Send to Maintenance</option>
-      <option value="Return from Maintenance">Return from Maintenance</option>
-    `;
-    
-    // Set intelligent default based on item state
-    if ((item.currentState?.inMaintenance || 0) > 0) {
-      typeSelect.value = 'Return from Maintenance';
-    } else if ((item.currentState?.inSession || 0) > 0) {
-      typeSelect.value = 'Return from Session';
-    } else if ((item.currentState?.rented || 0) > 0) {
-      typeSelect.value = 'Return from Rental';
-    } else {
-      typeSelect.value = 'Stock Addition';
-    }
-  }
-  
-  // Trigger update to show/hide relevant fields
-  updateEnhancedTransactionForm(typeSelect.value);
-}
+
 
 // Update form fields based on selected transaction type
 function updateEnhancedTransactionForm(type) {
@@ -3703,4 +3865,584 @@ if (transactionType) {
 
 
 
+
 }
+
+
+
+
+
+
+// Add this to public/js/inventory.js
+
+/**
+ * REVISED TRANSACTION SYSTEM
+ * 
+ * This implementation provides a simplified and more reliable approach
+ * for handling inventory transactions directly on the inventory page.
+ */
+
+// First, let's add a simple function to open the transaction modal
+function openTransactionDialog(item) {
+  console.log('Opening transaction dialog for item:', item);
+  
+  // Create a dedicated modal for transactions if it doesn't exist yet
+  let transactionModal = document.getElementById('simpleTransactionModal');
+  
+  if (!transactionModal) {
+    // Modal doesn't exist, so create it
+    const modalHtml = `
+      <div class="modal fade" id="simpleTransactionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="simpleTransactionTitle">Transaction</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <div id="simpleTransactionAlerts"></div>
+              
+              <form id="simpleTransactionForm">
+                <input type="hidden" id="transactionItemId">
+                
+                <div class="mb-3">
+                  <div class="d-flex mb-2">
+                    <div class="flex-grow-1">
+                      <h5 id="transactionItemName" class="mb-0">Item Name</h5>
+                      <span id="transactionItemCategory" class="badge bg-secondary me-2">Category</span>
+                      <span id="transactionItemStatus" class="badge bg-success">Status</span>
+                    </div>
+                    <div>
+                      <span id="transactionItemQuantity" class="h5">0</span>
+                      <small id="transactionItemUnit">units</small>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <label for="transactionType" class="form-label">Transaction Type*</label>
+                    <select class="form-select" id="transactionType" required>
+                      <option value="">Select Transaction Type</option>
+                      <!-- Transaction types will be populated dynamically -->
+                    </select>
+                  </div>
+                  <div class="col-md-6">
+                    <label for="transactionQuantity" class="form-label">Quantity*</label>
+                    <input type="number" class="form-control" id="transactionQuantity" min="1" value="1" required>
+                  </div>
+                </div>
+
+                <!-- Location fields -->
+                <div class="mb-3" id="transactionFromLocationGroup" style="display: none;">
+                  <label for="transactionFromLocation" class="form-label">From Location</label>
+                  <select class="form-select" id="transactionFromLocation">
+                    <option value="">Select Location</option>
+                    <!-- Will be populated from API -->
+                  </select>
+                </div>
+                
+                <div class="mb-3" id="transactionToLocationGroup" style="display: none;">
+                  <label for="transactionToLocation" class="form-label">To Location</label>
+                  <select class="form-select" id="transactionToLocation">
+                    <option value="">Select Location</option>
+                    <!-- Will be populated from API -->
+                  </select>
+                </div>
+                
+                <!-- Session Details -->
+                <div class="mb-3" id="sessionDetailsGroup" style="display: none;">
+                  <fieldset class="border rounded p-3">
+                    <legend class="w-auto float-none px-2 fs-6">Session Details</legend>
+                    <div class="row g-3">
+                      <div class="col-md-6">
+                        <label for="sessionName" class="form-label">Session Name</label>
+                        <input type="text" class="form-control" id="sessionName" placeholder="e.g., Clinical Training 101">
+                      </div>
+                      <div class="col-md-6">
+                        <label for="sessionLocation" class="form-label">Session Location</label>
+                        <input type="text" class="form-control" id="sessionLocation" placeholder="e.g., Training Room 2">
+                      </div>
+                    </div>
+                  </fieldset>
+                </div>
+                
+                <!-- Rental Details -->
+                <div class="mb-3" id="rentalDetailsGroup" style="display: none;">
+                  <fieldset class="border rounded p-3">
+                    <legend class="w-auto float-none px-2 fs-6">Rental Details</legend>
+                    <div class="row g-3">
+                      <div class="col-md-6">
+                        <label for="rentedTo" class="form-label">Rented To*</label>
+                        <input type="text" class="form-control" id="rentedTo" placeholder="Person or organization name">
+                      </div>
+                      <div class="col-md-6">
+                        <label for="expectedReturnDate" class="form-label">Expected Return Date</label>
+                        <input type="date" class="form-control" id="expectedReturnDate">
+                      </div>
+                    </div>
+                  </fieldset>
+                </div>
+                
+                <!-- Maintenance Details -->
+                <div class="mb-3" id="maintenanceDetailsGroup" style="display: none;">
+                  <fieldset class="border rounded p-3">
+                    <legend class="w-auto float-none px-2 fs-6">Maintenance Details</legend>
+                    <div class="row g-3">
+                      <div class="col-md-6">
+                        <label for="maintenanceProvider" class="form-label">Maintenance Provider</label>
+                        <input type="text" class="form-control" id="maintenanceProvider" placeholder="Provider or technician name">
+                      </div>
+                      <div class="col-md-6">
+                        <label for="expectedEndDate" class="form-label">Expected Completion Date</label>
+                        <input type="date" class="form-control" id="expectedEndDate">
+                      </div>
+                    </div>
+                  </fieldset>
+                </div>
+                
+                <div class="mb-3">
+                  <label for="transactionNotes" class="form-label">Notes</label>
+                  <textarea class="form-control" id="transactionNotes" rows="3"></textarea>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              <button type="button" class="btn btn-primary" id="saveTransactionBtn">Save Transaction</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Add the modal to the body
+    const modalContainer = document.createElement('div');
+    modalContainer.innerHTML = modalHtml;
+    document.body.appendChild(modalContainer.firstChild);
+    
+    // Set up event listeners for the new modal
+    document.getElementById('transactionType').addEventListener('change', function() {
+      updateTransactionFormFields(this.value);
+    });
+    
+    document.getElementById('saveTransactionBtn').addEventListener('click', saveTransaction);
+  }
+  
+  // Populate transaction type options based on item category and status
+  populateTransactionTypes(item);
+  
+  // Set item details in the modal
+  document.getElementById('transactionItemId').value = item._id;
+  document.getElementById('transactionItemName').textContent = item.name;
+  document.getElementById('transactionItemCategory').textContent = item.category;
+  document.getElementById('transactionItemStatus').textContent = item.status;
+  document.getElementById('transactionItemStatus').className = `badge ${getStatusBadgeClass(item.status)}`;
+  document.getElementById('transactionItemQuantity').textContent = item.quantity;
+  document.getElementById('transactionItemUnit').textContent = item.unit;
+  
+  // Set default quantity
+  const quantityInput = document.getElementById('transactionQuantity');
+  const availableQuantity = item.availableQuantity !== undefined ? 
+    item.availableQuantity : item.quantity;
+  
+  // Set the maximum quantity based on what's available
+  quantityInput.max = availableQuantity;
+  quantityInput.value = 1; // Default to 1
+  
+  // Load locations
+  loadLocationsForTransactionForm();
+  
+  // Show the modal
+  const modal = new bootstrap.Modal(document.getElementById('simpleTransactionModal'));
+  modal.show();
+}
+
+/**
+ * Populates transaction type dropdown based on item category and status
+ */
+function populateTransactionTypes(item) {
+  const transactionTypeSelect = document.getElementById('transactionType');
+  if (!transactionTypeSelect) return;
+  
+  // Clear existing options
+  transactionTypeSelect.innerHTML = '<option value="">Select Transaction Type</option>';
+  
+  const category = item.category;
+  const status = item.status;
+  const availableQuantity = item.availableQuantity !== undefined ? 
+    item.availableQuantity : item.quantity;
+  
+  // Default transaction options
+  const options = [];
+  
+  // Add transaction types based on item category
+  if (category === 'Consumable') {
+    // Consumable options
+    options.push({ value: 'Stock Addition', label: 'Add Stock' });
+    
+    // Only allow removal if there's stock available
+    if (availableQuantity > 0) {
+      options.push({ value: 'Stock Removal', label: 'Remove Stock' });
+    }
+  } else {
+    // Non-consumable options (equipment)
+    
+    // Always allow adding stock
+    options.push({ value: 'Stock Addition', label: 'Add Stock' });
+    
+    // Allow relocating if there's stock available
+    if (availableQuantity > 0) {
+      options.push({ value: 'Relocate', label: 'Relocate Item' });
+      options.push({ value: 'Check Out for Session', label: 'Use in Session' });
+      options.push({ value: 'Rent Out', label: 'Rent Out' });
+      options.push({ value: 'Send to Maintenance', label: 'Send to Maintenance' });
+    }
+    
+    // Check if any items are out and can be returned
+    const inMaintenanceCount = item.currentState?.inMaintenance || 0;
+    const inSessionCount = item.currentState?.inSession || 0;
+    const rentedCount = item.currentState?.rented || 0;
+    
+    if (inMaintenanceCount > 0) {
+      options.push({ value: 'Return from Maintenance', label: 'Return from Maintenance' });
+    }
+    
+    if (inSessionCount > 0) {
+      options.push({ value: 'Return from Session', label: 'Return from Session' });
+    }
+    
+    if (rentedCount > 0) {
+      options.push({ value: 'Return from Rental', label: 'Return from Rental' });
+    }
+  }
+  
+  // Add options to the select element
+  options.forEach(option => {
+    const optionElement = document.createElement('option');
+    optionElement.value = option.value;
+    optionElement.textContent = option.label;
+    transactionTypeSelect.appendChild(optionElement);
+  });
+  
+  // Select the first transaction type by default
+  if (options.length > 0) {
+    transactionTypeSelect.value = options[0].value;
+    
+    // Trigger change event to update form fields
+    transactionTypeSelect.dispatchEvent(new Event('change'));
+  }
+}
+
+
+
+/**
+ * Updates quantity input limits based on transaction type
+ */
+function updateQuantityLimits(transactionType) {
+  const quantityInput = document.getElementById('transactionQuantity');
+  if (!quantityInput) return;
+  
+  const itemId = document.getElementById('transactionItemId').value;
+  if (!itemId) return;
+  
+  // Fetch current item data
+  fetchWithAuth(`${API_URL}/items/${itemId}`)
+    .then(response => {
+      if (!response.ok) throw new Error('Failed to fetch item');
+      return response.json();
+    })
+    .then(item => {
+      let maxQuantity = 1;
+      
+      // Set maximum quantity based on transaction type
+      switch (transactionType) {
+        case 'Stock Addition':
+          // No real limit for adding stock
+          maxQuantity = 9999;
+          break;
+          
+        case 'Stock Removal':
+        case 'Relocate':
+        case 'Check Out for Session':
+        case 'Rent Out':
+        case 'Send to Maintenance':
+          // Limited by available quantity
+          maxQuantity = item.availableQuantity !== undefined ? 
+            item.availableQuantity : item.quantity;
+          break;
+          
+        case 'Return from Session':
+          // Limited by items in session
+          maxQuantity = item.currentState?.inSession || 0;
+          break;
+          
+        case 'Return from Rental':
+          // Limited by items rented
+          maxQuantity = item.currentState?.rented || 0;
+          break;
+          
+        case 'Return from Maintenance':
+          // Limited by items in maintenance
+          maxQuantity = item.currentState?.inMaintenance || 0;
+          break;
+      }
+      
+      // Update the input field
+      quantityInput.max = maxQuantity;
+      
+      // If current value exceeds max, adjust it
+      if (parseInt(quantityInput.value) > maxQuantity) {
+        quantityInput.value = maxQuantity;
+      }
+      
+      // Ensure minimum of 1
+      if (parseInt(quantityInput.value) < 1) {
+        quantityInput.value = 1;
+      }
+    })
+    .catch(error => {
+      console.error('Error updating quantity limits:', error);
+    });
+}
+
+/**
+ * Loads locations for transaction form dropdowns
+ */
+function loadLocationsForTransactionForm() {
+  fetchWithAuth(`${API_URL}/locations/hierarchy`)
+    .then(response => {
+      if (!response.ok) throw new Error('Failed to fetch locations');
+      return response.json();
+    })
+    .then(locations => {
+      // Populate location dropdowns
+      const fromLocationSelect = document.getElementById('transactionFromLocation');
+      const toLocationSelect = document.getElementById('transactionToLocation');
+      
+      // Clear existing options
+      fromLocationSelect.innerHTML = '<option value="">Select Location</option>';
+      toLocationSelect.innerHTML = '<option value="">Select Location</option>';
+      
+      // Add options for each room
+      locations.forEach(room => {
+        fromLocationSelect.innerHTML += `<option value="${room._id}">${room.name}</option>`;
+        toLocationSelect.innerHTML += `<option value="${room._id}">${room.name}</option>`;
+        
+        // Add options for each rack if populated as a hierarchy
+        if (room.racks && room.racks.length > 0) {
+          room.racks.forEach(rack => {
+            fromLocationSelect.innerHTML += `<option value="${rack._id}">&nbsp;&nbsp;└ ${rack.name}</option>`;
+            toLocationSelect.innerHTML += `<option value="${rack._id}">&nbsp;&nbsp;└ ${rack.name}</option>`;
+          });
+        }
+      });
+    })
+    .catch(error => {
+      console.error('Error loading locations:', error);
+    });
+}
+
+
+
+// Replace the existing broken transaction button handler with this new implementation
+function setupImprovedTransactionButtons() {
+  console.log('Setting up improved transaction buttons');
+  
+  // Add a global click handler that will work for dynamically added buttons
+  document.addEventListener('click', function(e) {
+    // Find if the click was on a transaction button or its child elements
+    const transactionBtn = e.target.closest('.transaction-btn');
+    
+    if (transactionBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const itemId = transactionBtn.dataset.id;
+      if (!itemId) {
+        console.error('Transaction button missing item ID');
+        return;
+      }
+      
+      // Fetch the item data and open the transaction dialog
+      fetchWithAuth(`${API_URL}/items/${itemId}`)
+        .then(response => {
+          if (!response.ok) throw new Error('Failed to fetch item');
+          return response.json();
+        })
+        .then(item => {
+          openTransactionDialog(item);
+        })
+        .catch(error => {
+          console.error('Error fetching item for transaction:', error);
+          showAlert('Error loading item data', 'danger');
+        });
+    }
+  });
+}
+
+
+// Add this to your inventory.js file
+function replaceTransactionButtons() {
+  document.querySelectorAll('.transaction-btn').forEach(btn => {
+    const itemId = btn.dataset.id;
+    const itemName = btn.dataset.name;
+    
+    // Create a new link element with the same styling
+    const link = document.createElement('a');
+    link.href = `transaction.html?id=${itemId}`;
+    link.className = btn.className.replace('transaction-btn', 'transaction-link');
+    link.innerHTML = '<i class="fas fa-exchange-alt"></i>';
+    link.title = `Create Transaction for ${itemName}`;
+    
+    // Replace the button with the link
+    btn.parentNode.replaceChild(link, btn);
+  });
+}
+
+
+
+
+
+// Add this to inventory.js for testing
+function testAuthConnection() {
+  fetchWithAuth(`${API_URL}/items`)
+    .then(response => {
+      if (response && response.ok) {
+        console.log('Authentication is working');
+      } else {
+        console.log('Authentication failed - you may need to log in again');
+        // Redirect to login if auth fails
+        if (response && response.status === 401) {
+          logout();
+        }
+      }
+    })
+    .catch(error => {
+      console.error('Auth test failed:', error);
+    });
+}
+
+
+
+
+
+
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Check if user is logged in
+  const token = getAuthToken();
+  const user = getCurrentUser();
+  
+  if (!token || !user) {
+    window.location.href = '../index.html';
+    return;
+  }
+
+    addModalFixStyles();
+    // setupTransactionButtons();
+    // fixTransactionModal();
+    setupEnhancedTransactions();
+  
+  // Setup event listeners
+  setupEventListeners();
+
+  setupBarcodeEventListeners();
+
+  setupBarcodeChangeListeners();
+
+
+  // Fix modal accessibility issues
+  fixModalAccessibilityIssues();
+
+    
+  // Fix transaction modal issues
+  // fixTransactionModal();
+  
+  // Make sure Save Item button has event listener attached
+  const saveItemBtn = document.getElementById('saveItemBtn');
+  if (saveItemBtn) {
+    // Remove any existing event listeners to avoid duplicates
+    const newSaveBtn = saveItemBtn.cloneNode(true);
+    saveItemBtn.parentNode.replaceChild(newSaveBtn, saveItemBtn);
+    
+    // Add new event listener
+    newSaveBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      console.log('Save button clicked');
+      saveItem();
+    });
+  }
+
+  
+  // Show/hide manager/admin features based on user role
+  if (isInventoryManager()) {
+    document.querySelectorAll('.manager-only').forEach(el => el.classList.remove('d-none'));
+  }
+  
+  if (isAdmin()) {
+    document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('d-none'));
+  }
+  
+  // Update user info
+  document.getElementById('userName').textContent = user.name;
+  document.getElementById('profileName').value = user.name;
+  document.getElementById('profileEmail').value = user.email;
+  document.getElementById('profileRole').value = user.role;
+  
+  // Initialize the inventory
+  initializeInventory();
+  
+  // Load locations and suppliers for the form
+  loadLocationsAndSuppliers();
+
+
+  // Auto-focus the barcode lookup field
+  const quickBarcodeSearch = document.getElementById('quickBarcodeSearch');
+  if (quickBarcodeSearch) {
+    setTimeout(() => {
+      quickBarcodeSearch.focus();
+    }, 500);
+  }
+  
+  // Look for the 'addItem' hash fragment to automatically open Add Item modal
+  if (window.location.hash === '#addItem') {
+    document.getElementById('addItemBtn').click();
+  }
+
+
+
+  function fixModalAccessibilityIssues() {
+    // When any modal is hidden, properly clean up ARIA attributes
+    document.body.addEventListener('hidden.bs.modal', function(event) {
+      // Reset focus to body
+      document.body.focus();
+      
+      // Remove aria-hidden from all elements
+      document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
+        el.removeAttribute('aria-hidden');
+      });
+      
+      // Clear any remaining modal-related classes and styles
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+      
+      // Remove any leftover backdrops
+      document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+        backdrop.remove();
+      });
+    }, true);
+  }
+
+
+    // Add this line to your existing DOMContentLoaded handler
+    setupImprovedTransactionButtons();
+
+      setupImageHandling();
+       // Test authentication
+  testAuthConnection();
+
+});
+

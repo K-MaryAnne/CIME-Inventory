@@ -77,6 +77,7 @@ const ItemSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Supplier'
   },
+   
   manufacturer: {
     type: String
   },

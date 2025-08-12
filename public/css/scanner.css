@@ -215,4 +215,13 @@
 
 
   
-  
+  /* Animation for items loaded from inventory */
+@keyframes highlight-success {
+  0% { background-color: #ffffff; }
+  30% { background-color: #d4edda; }
+  100% { background-color: #ffffff; }
+}
+
+.highlight-success {
+  animation: highlight-success 1.5s;
+}

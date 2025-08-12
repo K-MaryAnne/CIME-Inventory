@@ -3,6 +3,8 @@ const Item = require('../models/Item');
 const Transaction = require('../models/Transaction');
 const QRCode = require('qrcode');
 const nodemailer = require('nodemailer');
+const path = require('path');
+const sharp = require('sharp');
 
 // Setup email transporter
 const transporter = nodemailer.createTransport({
@@ -831,6 +833,14 @@ const getItemTransactionsGrouped = async (req, res) => {
 };
 
 
+
+
+
+
+
+
+
+
 module.exports = {
   getItems,
   getItemById,
@@ -841,5 +851,6 @@ module.exports = {
   createItemTransaction,
   getLowStockItems,
   createEnhancedTransaction,
-  getItemTransactionsGrouped
+  getItemTransactionsGrouped,
+ 
 };
