@@ -428,13 +428,16 @@ const getLowStockItems = async (req, res) => {
 };
 
 
-
 // @desc    Create an enhanced transaction
-// @route   POST /api/items/:id/transaction
+// @route   POST /api/items/:id/enhanced-transaction
 // @access  Private
+
 
 const createEnhancedTransaction = async (req, res) => {
   try {
+    console.log('=== TRANSACTION START ===');
+    console.log('Request body:', req.body);
+    
     const {
       type,
       quantity,
@@ -459,55 +462,65 @@ const createEnhancedTransaction = async (req, res) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
+    console.log('Item found:', item.name, 'Category:', item.category);
+    console.log('Current quantity:', item.quantity);
+    console.log('Current availableQuantity:', item.availableQuantity);
+    console.log('Current state:', item.currentState);
+
+    // Initialize currentState if it doesn't exist
+    if (!item.currentState) {
+      item.currentState = {
+        inMaintenance: 0,
+        inSession: 0,
+        rented: 0
+      };
+      console.log('Initialized currentState');
+    }
+
+    // Initialize availableQuantity if undefined
     if (item.availableQuantity === undefined) {
-      item.availableQuantity = Math.max(0, 
-        item.quantity - 
-        (item.currentState?.inMaintenance || 0) - 
-        (item.currentState?.inSession || 0) - 
-        (item.currentState?.rented || 0)
-      );
+      if (item.category === 'Consumable') {
+        item.availableQuantity = item.quantity;
+      } else {
+        item.availableQuantity = Math.max(0, 
+          item.quantity - 
+          (item.currentState.inMaintenance || 0) - 
+          (item.currentState.inSession || 0) - 
+          (item.currentState.rented || 0)
+        );
+      }
+      console.log('Calculated availableQuantity:', item.availableQuantity);
     }
     
-
+    // Process transaction based on type and category
+    console.log('Processing transaction type:', type);
+    
     if (item.category === 'Consumable') {
-
+      // CONSUMABLE LOGIC
       switch (type) {
         case 'Stock Addition':
         case 'Add Stock':
-   
+        case 'Restock':
+          console.log('Adding stock:', quantity);
           item.quantity += parseInt(quantity);
-          item.availableQuantity += parseInt(quantity);
+          item.availableQuantity = item.quantity; // For consumables, available = total
           break;
           
         case 'Stock Consumption':
         case 'Use Items':
- 
+        case 'Check-out':
+          console.log('Consuming items:', quantity);
           if (item.availableQuantity < parseInt(quantity)) {
             return res.status(400).json({ 
               message: 'Not enough available items for consumption' 
             });
           }
-          item.availableQuantity -= parseInt(quantity);
-
-          break;
-          
-        case 'Stock Adjustment':
-
-          const adjustment = parseInt(quantity);
-          if (item.availableQuantity + adjustment < 0) {
-            return res.status(400).json({ 
-              message: 'Adjustment would result in negative stock' 
-            });
-          }
-          item.availableQuantity += adjustment;
-
-          if (adjustment > 0) {
-            item.quantity += adjustment;
-          }
+          item.quantity -= parseInt(quantity);
+          item.availableQuantity = item.quantity;
           break;
           
         case 'Check Out for Session':
-
+          console.log('Taking for session:', quantity);
           if (item.availableQuantity < parseInt(quantity)) {
             return res.status(400).json({ 
               message: 'Not enough available items' 
@@ -516,6 +529,8 @@ const createEnhancedTransaction = async (req, res) => {
           item.availableQuantity -= parseInt(quantity);
           item.currentState.inSession += parseInt(quantity);
           
+          // Add session record
+          if (!item.sessionRecords) item.sessionRecords = [];
           if (session && (session.name || session.location)) {
             item.sessionRecords.push({
               sessionName: session.name || 'Unnamed Session',
@@ -528,7 +543,8 @@ const createEnhancedTransaction = async (req, res) => {
           break;
           
         case 'Return from Session':
-     
+        case 'Check-in':
+          console.log('Returning from session:', quantity);
           if (item.currentState.inSession < parseInt(quantity)) {
             return res.status(400).json({ 
               message: `Cannot return more items than are in session (${item.currentState.inSession} currently in session)` 
@@ -536,17 +552,18 @@ const createEnhancedTransaction = async (req, res) => {
           }
           item.availableQuantity += parseInt(quantity);
           item.currentState.inSession -= parseInt(quantity);
+          break;
           
-    
-          if (session && session.name) {
-            const sessionRecord = item.sessionRecords.find(
-              record => record.sessionName === session.name && !record.endDate
-            );
-            if (sessionRecord) {
-              sessionRecord.endDate = new Date();
-              sessionRecord.notes += notes ? `\nReturn notes: ${notes}` : '';
-            }
+        case 'Stock Removal':
+        case 'Remove Stock':
+          console.log('Removing stock:', quantity);
+          if (item.availableQuantity < parseInt(quantity)) {
+            return res.status(400).json({ 
+              message: 'Not enough available items for removal' 
+            });
           }
+          item.quantity -= parseInt(quantity);
+          item.availableQuantity = item.quantity;
           break;
           
         default:
@@ -555,18 +572,19 @@ const createEnhancedTransaction = async (req, res) => {
           });
       }
     } else {
-
+      // EQUIPMENT LOGIC
       switch (type) {
         case 'Stock Addition':
         case 'Add Stock':
-    
+        case 'Restock':
+          console.log('Adding equipment:', quantity);
           item.quantity += parseInt(quantity);
           item.availableQuantity += parseInt(quantity);
           break;
           
         case 'Stock Removal':
         case 'Remove Stock':
-      
+          console.log('Removing equipment:', quantity);
           if (item.availableQuantity < parseInt(quantity)) {
             return res.status(400).json({ 
               message: 'Not enough available items for removal' 
@@ -576,15 +594,9 @@ const createEnhancedTransaction = async (req, res) => {
           item.availableQuantity -= parseInt(quantity);
           break;
           
-        case 'Relocate':
-  
-          if (toLocation) {
-            item.location.room = toLocation;
-          }
-          break;
-          
         case 'Check Out for Session':
- 
+        case 'Check-out':
+          console.log('Taking equipment for session:', quantity);
           if (item.availableQuantity < parseInt(quantity)) {
             return res.status(400).json({ 
               message: 'Not enough available items' 
@@ -593,6 +605,7 @@ const createEnhancedTransaction = async (req, res) => {
           item.availableQuantity -= parseInt(quantity);
           item.currentState.inSession += parseInt(quantity);
           
+          if (!item.sessionRecords) item.sessionRecords = [];
           if (session && (session.name || session.location)) {
             item.sessionRecords.push({
               sessionName: session.name || 'Unnamed Session',
@@ -605,6 +618,8 @@ const createEnhancedTransaction = async (req, res) => {
           break;
           
         case 'Return from Session':
+        case 'Check-in':
+          console.log('Returning equipment from session:', quantity);
           if (item.currentState.inSession < parseInt(quantity)) {
             return res.status(400).json({ 
               message: `Cannot return more items than are in session (${item.currentState.inSession} currently in session)` 
@@ -612,59 +627,11 @@ const createEnhancedTransaction = async (req, res) => {
           }
           item.availableQuantity += parseInt(quantity);
           item.currentState.inSession -= parseInt(quantity);
-          
-          if (session && session.name) {
-            const sessionRecord = item.sessionRecords.find(
-              record => record.sessionName === session.name && !record.endDate
-            );
-            if (sessionRecord) {
-              sessionRecord.endDate = new Date();
-              sessionRecord.notes += notes ? `\nReturn notes: ${notes}` : '';
-            }
-          }
-          break;
-          
-        case 'Rent Out':
-          if (item.availableQuantity < parseInt(quantity)) {
-            return res.status(400).json({ 
-              message: 'Not enough available items' 
-            });
-          }
-          item.availableQuantity -= parseInt(quantity);
-          item.currentState.rented += parseInt(quantity);
-          
-          if (rental && rental.rentedTo) {
-            item.rentalRecords.push({
-              rentedTo: rental.rentedTo,
-              startDate: new Date(),
-              expectedReturnDate: rental.expectedReturnDate || null,
-              quantity: parseInt(quantity),
-              notes: notes || ''
-            });
-          }
-          break;
-          
-        case 'Return from Rental':
-          if (item.currentState.rented < parseInt(quantity)) {
-            return res.status(400).json({ 
-              message: `Cannot return more items than are rented (${item.currentState.rented} currently rented)` 
-            });
-          }
-          item.availableQuantity += parseInt(quantity);
-          item.currentState.rented -= parseInt(quantity);
-          
-          if (rental && rental.rentedTo) {
-            const rentalRecord = item.rentalRecords.find(
-              record => record.rentedTo === rental.rentedTo && !record.returnedDate
-            );
-            if (rentalRecord) {
-              rentalRecord.returnedDate = new Date();
-              rentalRecord.notes += notes ? `\nReturn notes: ${notes}` : '';
-            }
-          }
           break;
           
         case 'Send to Maintenance':
+        case 'Maintenance':
+          console.log('Sending to maintenance:', quantity);
           if (item.availableQuantity < parseInt(quantity)) {
             return res.status(400).json({ 
               message: 'Not enough available items' 
@@ -674,6 +641,7 @@ const createEnhancedTransaction = async (req, res) => {
           item.currentState.inMaintenance += parseInt(quantity);
           item.lastMaintenanceDate = new Date();
           
+          if (!item.maintenanceRecords) item.maintenanceRecords = [];
           item.maintenanceRecords.push({
             startDate: new Date(),
             expectedEndDate: maintenance?.expectedEndDate || null,
@@ -684,6 +652,7 @@ const createEnhancedTransaction = async (req, res) => {
           break;
           
         case 'Return from Maintenance':
+          console.log('Returning from maintenance:', quantity);
           if (item.currentState.inMaintenance < parseInt(quantity)) {
             return res.status(400).json({ 
               message: `Cannot return more items than are in maintenance (${item.currentState.inMaintenance} currently in maintenance)` 
@@ -691,15 +660,6 @@ const createEnhancedTransaction = async (req, res) => {
           }
           item.availableQuantity += parseInt(quantity);
           item.currentState.inMaintenance -= parseInt(quantity);
-          
-          const maintenanceRecord = item.maintenanceRecords
-            .filter(record => !record.completedDate)
-            .sort((a, b) => b.startDate - a.startDate)[0];
-            
-          if (maintenanceRecord) {
-            maintenanceRecord.completedDate = new Date();
-            maintenanceRecord.notes += notes ? `\nCompletion notes: ${notes}` : '';
-          }
           break;
           
         default:
@@ -709,21 +669,27 @@ const createEnhancedTransaction = async (req, res) => {
       }
     }
     
-
+    // Ensure no negative values
     if (item.availableQuantity < 0) {
       item.availableQuantity = 0;
     }
     
-
     if (item.quantity < 0) {
       item.quantity = 0;
     }
     
-
+    console.log('BEFORE SAVE:');
+    console.log('Quantity:', item.quantity);
+    console.log('Available:', item.availableQuantity);
+    console.log('Current state:', item.currentState);
+    
+    // Update timestamp and save
     item.updatedAt = new Date();
     await item.save();
     
- 
+    console.log('Item saved successfully');
+    
+    // Create transaction record
     const transactionData = {
       item: item._id,
       type,
@@ -732,7 +698,6 @@ const createEnhancedTransaction = async (req, res) => {
       notes
     };
     
-
     if (fromLocation && fromLocation !== '') {
       transactionData.fromLocation = fromLocation;
     }
@@ -754,38 +719,16 @@ const createEnhancedTransaction = async (req, res) => {
     }
     
     const transaction = await Transaction.create(transactionData);
+    console.log('Transaction created:', transaction._id);
     
-  
-    if (item.category === 'Consumable' && item.availableQuantity <= item.reorderLevel) {
-
-      const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: process.env.ADMIN_EMAIL || 'admin@cimenairobi.com',
-        subject: `Low Stock Alert: ${item.name}`,
-        html: `
-          <h2>Low Stock Alert</h2>
-          <p>The following consumable item is running low:</p>
-          <ul>
-            <li><strong>Item:</strong> ${item.name}</li>
-            <li><strong>Available Quantity:</strong> ${item.availableQuantity} ${item.unit}</li>
-            <li><strong>Reorder Level:</strong> ${item.reorderLevel} ${item.unit}</li>
-          </ul>
-          <p>Please restock this item soon.</p>
-        `
-      };
-      
-      try {
-        await transporter.sendMail(mailOptions);
-        console.log(`Low stock alert sent for ${item.name}`);
-      } catch (err) {
-        console.error('Email sending failed:', err);
-      }
-    }
-    
+    console.log('=== TRANSACTION COMPLETE ===');
     res.status(201).json(transaction);
+    
   } catch (error) {
-    console.error('Transaction error:', error);
-    res.status(500).json({ message: 'Server Error' });
+    console.error('=== TRANSACTION ERROR ===');
+    console.error('Error details:', error);
+    console.error('Stack trace:', error.stack);
+    res.status(500).json({ message: 'Server Error: ' + error.message });
   }
 };
 

@@ -10,6 +10,137 @@ let bulkMode = false;
 let bulkItems = []; // Will store items for bulk transaction
 
 
+function openBulkItemTransactionPicker(item) {
+  let modal = document.getElementById('bulkItemTransactionModal');
+  if (!modal) {
+    console.error('Bulk transaction modal not found');
+    return;
+  }
+  
+  // Populate modal
+  document.getElementById('bulkItemId').value = item._id;
+  document.getElementById('bulkItemName').textContent = item.name;
+  document.getElementById('bulkItemCategory').textContent = item.category;
+  document.getElementById('bulkItemStatus').textContent = item.status;
+  document.getElementById('bulkItemStatus').className = `badge ${getStatusBadgeClass(item.status)}`;
+  
+  populateBulkItemTransactionTypes(item);
+  document.getElementById('bulkItemQuantity').value = 1;
+  document.getElementById('bulkItemNotes').value = '';
+  
+  window.currentBulkItem = item;
+  
+  const bsModal = new bootstrap.Modal(modal);
+  bsModal.show();
+  
+  // Set up event listeners if not already done
+  if (!window.bulkModalListenersSet) {
+    setupBulkItemModalListeners();
+    window.bulkModalListenersSet = true;
+  }
+}
+
+function populateBulkItemTransactionTypes(item) {
+  const typeSelect = document.getElementById('bulkItemTransactionType');
+  typeSelect.innerHTML = '<option value="">Choose transaction type...</option>';
+  
+  const availableQuantity = item.availableQuantity !== undefined ? item.availableQuantity : item.quantity;
+  
+  if (item.category === 'Consumable') {
+    typeSelect.innerHTML += '<option value="Restock">Add Stock</option>';
+    if (availableQuantity > 0) {
+      typeSelect.innerHTML += '<option value="Check-out">Use Up</option>';
+      typeSelect.innerHTML += '<option value="Check Out for Session">Take for Session</option>';
+    }
+    const inSession = item.currentState?.inSession || 0;
+    if (inSession > 0) {
+      typeSelect.innerHTML += '<option value="Check-in">Return Unused</option>';
+    }
+  } else {
+    typeSelect.innerHTML += '<option value="Restock">Add Equipment</option>';
+    if (availableQuantity > 0) {
+      typeSelect.innerHTML += '<option value="Check Out for Session">Use in Session</option>';
+      typeSelect.innerHTML += '<option value="Send to Maintenance">Send for Repair</option>';
+    }
+    const inMaintenance = item.currentState?.inMaintenance || 0;
+    const inSession = item.currentState?.inSession || 0;
+    if (inMaintenance > 0) {
+      typeSelect.innerHTML += '<option value="Return from Maintenance">Return from Repair</option>';
+    }
+    if (inSession > 0) {
+      typeSelect.innerHTML += '<option value="Return from Session">Return from Session</option>';
+    }
+  }
+}
+
+function setupBulkItemModalListeners() {
+  document.getElementById('decreaseQty').addEventListener('click', function() {
+    const qtyInput = document.getElementById('bulkItemQuantity');
+    const currentValue = parseInt(qtyInput.value) || 1;
+    if (currentValue > 1) {
+      qtyInput.value = currentValue - 1;
+    }
+  });
+  
+  document.getElementById('increaseQty').addEventListener('click', function() {
+    const qtyInput = document.getElementById('bulkItemQuantity');
+    const currentValue = parseInt(qtyInput.value) || 1;
+    qtyInput.value = currentValue + 1;
+  });
+  
+  document.getElementById('addToBulkListBtn').addEventListener('click', addItemToBulkList);
+}
+
+function addItemToBulkList() {
+  const transactionType = document.getElementById('bulkItemTransactionType').value;
+  const quantity = parseInt(document.getElementById('bulkItemQuantity').value);
+  const notes = document.getElementById('bulkItemNotes').value;
+  const item = window.currentBulkItem;
+  
+  if (!transactionType) {
+    showAlert('Please select a transaction type', 'warning', 'bulkItemAlerts');
+    return;
+  }
+  
+  if (!quantity || quantity <= 0) {
+    showAlert('Please enter a valid quantity', 'warning', 'bulkItemAlerts');
+    return;
+  }
+  
+  const bulkItemData = {
+    ...item,
+    bulkTransactionType: transactionType,
+    bulkQuantity: quantity,
+    bulkNotes: notes,
+    bulkId: Date.now() + Math.random()
+  };
+  
+  // Check if item already exists and replace it
+  const existingIndex = bulkItems.findIndex(bulkItem => bulkItem._id === item._id);
+  if (existingIndex >= 0) {
+    bulkItems[existingIndex] = bulkItemData;
+    showAlert(`Updated ${item.name} in bulk list`, 'info');
+  } else {
+    bulkItems.push(bulkItemData);
+    showAlert(`Added ${item.name} to bulk list`, 'success');
+  }
+  
+  updateBulkItemsDisplay();
+  document.getElementById('bulkItemCount').textContent = bulkItems.length;
+  document.getElementById('clearBulkItems').classList.remove('d-none');
+  document.getElementById('processBulkItems').classList.remove('d-none');
+  
+  const modal = bootstrap.Modal.getInstance(document.getElementById('bulkItemTransactionModal'));
+  modal.hide();
+  
+  playSuccessSound();
+  setTimeout(() => {
+    document.getElementById('barcodeInput').focus();
+    document.getElementById('barcodeInput').value = '';
+  }, 300);
+}
+
+
 
 
 function updateTransactionFormFields(transactionType) {
@@ -340,35 +471,77 @@ function getMaxQuantityForItem(item) {
 }
 
 
+// function toggleBulkMode() {
+//   bulkMode = !bulkMode;
+
+//   const bulkModeButton = document.getElementById('bulkModeToggle');
+//   const bulkItemsContainer = document.getElementById('bulkItemsContainer');
+  
+//   if (!bulkModeButton || !bulkItemsContainer) {
+//     console.error('Bulk mode elements not found');
+//     return;
+//   }
+  
+//   if (bulkMode) {
+
+//     bulkModeButton.classList.replace('btn-outline-primary', 'btn-primary');
+//     bulkModeButton.innerHTML = '<i class="fas fa-layer-group me-1"></i> Exit Bulk Mode';
+//     bulkItemsContainer.classList.remove('d-none');
+    
+  
+//     if (!document.getElementById('bulkItemsList').children.length) {
+//       createBulkItemsDisplay();
+//     }
+    
+//     showAlert('Bulk Mode activated. Scan multiple items, then process them all at once.', 'info');
+//   } else {
+
+//     bulkModeButton.classList.replace('btn-primary', 'btn-outline-primary');
+//     bulkModeButton.innerHTML = '<i class="fas fa-layer-group me-1"></i> Bulk Mode';
+    
+   
+//     if (bulkItems.length === 0) {
+//       bulkItemsContainer.classList.add('d-none');
+//     }
+    
+//     showAlert('Bulk Mode deactivated.', 'info');
+//   }
+  
+
+//   document.getElementById('barcodeInput').focus();
+// }
+
 function toggleBulkMode() {
   bulkMode = !bulkMode;
 
   const bulkModeButton = document.getElementById('bulkModeToggle');
   const bulkItemsContainer = document.getElementById('bulkItemsContainer');
-  
-  if (!bulkModeButton || !bulkItemsContainer) {
-    console.error('Bulk mode elements not found');
-    return;
-  }
+  const quickButtonsContainer = document.querySelector('.transaction-btn-group');
   
   if (bulkMode) {
-
     bulkModeButton.classList.replace('btn-outline-primary', 'btn-primary');
     bulkModeButton.innerHTML = '<i class="fas fa-layer-group me-1"></i> Exit Bulk Mode';
     bulkItemsContainer.classList.remove('d-none');
     
-  
+    // Hide quick transaction buttons
+    if (quickButtonsContainer) {
+      quickButtonsContainer.style.display = 'none';
+    }
+    
     if (!document.getElementById('bulkItemsList').children.length) {
       createBulkItemsDisplay();
     }
     
-    showAlert('Bulk Mode activated. Scan multiple items, then process them all at once.', 'info');
+    showAlert('Bulk Mode activated. Scan items and choose individual transactions.', 'info');
   } else {
-
     bulkModeButton.classList.replace('btn-primary', 'btn-outline-primary');
     bulkModeButton.innerHTML = '<i class="fas fa-layer-group me-1"></i> Bulk Mode';
     
-   
+    // Show quick transaction buttons again
+    if (quickButtonsContainer) {
+      quickButtonsContainer.style.display = 'grid';
+    }
+    
     if (bulkItems.length === 0) {
       bulkItemsContainer.classList.add('d-none');
     }
@@ -376,11 +549,8 @@ function toggleBulkMode() {
     showAlert('Bulk Mode deactivated.', 'info');
   }
   
-
   document.getElementById('barcodeInput').focus();
 }
-
-
 
 
 
@@ -477,6 +647,86 @@ function createBulkItemsDisplay() {
 }
 
 
+// function updateBulkItemsDisplay() {
+//   const container = document.getElementById('bulkItemsList');
+  
+//   if (!container) {
+//     console.error('Bulk items list container not found');
+//     return;
+//   }
+  
+//   if (bulkItems.length === 0) {
+//     container.innerHTML = '<div class="text-center py-3 text-muted">No items scanned yet. Start scanning to add items.</div>';
+//     return;
+//   }
+
+//   container.innerHTML = '';
+  
+
+//   bulkItems.forEach((item, index) => {
+//     const itemElement = document.createElement('div');
+//     itemElement.id = `bulk-item-${item._id}`;
+//     itemElement.className = 'list-group-item';
+    
+//     const statusClass = getStatusClass(item.status);
+//     const maxQuantity = getMaxQuantityForItem(item);
+    
+//     itemElement.innerHTML = `
+//       <div class="d-flex justify-content-between align-items-center">
+//         <div class="d-flex align-items-center flex-grow-1">
+//           <span class="badge ${statusClass} me-2">${item.status}</span>
+//           <div>
+//             <div class="fw-semibold">${item.name}</div>
+//             <small class="text-muted">${item.category}</small>
+//           </div>
+//         </div>
+//         <div class="d-flex align-items-center">
+//           <div class="input-group input-group-sm me-2" style="width: 120px;">
+//             <button class="btn btn-outline-secondary decrease-quantity" type="button" data-index="${index}">-</button>
+//             <input type="number" class="form-control text-center item-quantity" value="${item.bulkCount || 1}" 
+//                    min="1" max="${maxQuantity}" data-index="${index}">
+//             <button class="btn btn-outline-secondary increase-quantity" type="button" data-index="${index}">+</button>
+//           </div>
+//           <button class="btn btn-sm btn-outline-danger remove-bulk-item" data-index="${index}">
+//             <i class="fas fa-times"></i>
+//           </button>
+//         </div>
+//       </div>
+//     `;
+    
+//     container.appendChild(itemElement);
+//   });
+  
+
+//   document.querySelectorAll('.decrease-quantity').forEach(btn => {
+//     btn.addEventListener('click', function() {
+//       const index = parseInt(this.getAttribute('data-index'));
+//       decreaseBulkItemQuantity(index);
+//     });
+//   });
+  
+//   document.querySelectorAll('.increase-quantity').forEach(btn => {
+//     btn.addEventListener('click', function() {
+//       const index = parseInt(this.getAttribute('data-index'));
+//       increaseBulkItemQuantity(index);
+//     });
+//   });
+  
+//   document.querySelectorAll('.item-quantity').forEach(input => {
+//     input.addEventListener('change', function() {
+//       const index = parseInt(this.getAttribute('data-index'));
+//       updateBulkItemQuantity(index, parseInt(this.value));
+//     });
+//   });
+  
+
+//   document.querySelectorAll('.remove-bulk-item').forEach(btn => {
+//     btn.addEventListener('click', function() {
+//       const index = parseInt(this.getAttribute('data-index'));
+//       removeBulkItemByIndex(index);
+//     });
+//   });
+// }
 function updateBulkItemsDisplay() {
   const container = document.getElementById('bulkItemsList');
   
@@ -492,31 +742,30 @@ function updateBulkItemsDisplay() {
 
   container.innerHTML = '';
   
-
   bulkItems.forEach((item, index) => {
     const itemElement = document.createElement('div');
-    itemElement.id = `bulk-item-${item._id}`;
     itemElement.className = 'list-group-item';
     
-    const statusClass = getStatusClass(item.status);
-    const maxQuantity = getMaxQuantityForItem(item);
+    const statusClass = getStatusBadgeClass(item.status);
+    const transactionIcon = getTransactionIcon(item.bulkTransactionType);
+    const transactionLabel = getTransactionLabel(item.bulkTransactionType);
     
     itemElement.innerHTML = `
       <div class="d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center flex-grow-1">
-          <span class="badge ${statusClass} me-2">${item.status}</span>
-          <div>
-            <div class="fw-semibold">${item.name}</div>
-            <small class="text-muted">${item.category}</small>
+        <div class="flex-grow-1">
+          <div class="d-flex align-items-center mb-1">
+            <span class="${statusClass} me-2">${item.status}</span>
+            <div>
+              <div class="fw-semibold">${item.name}</div>
+              <small class="text-muted">${item.category}</small>
+            </div>
+          </div>
+          <div class="d-flex align-items-center">
+            <span class="badge bg-primary me-2">${transactionIcon} ${transactionLabel}</span>
+            <small class="text-muted">Qty: ${item.bulkQuantity}</small>
           </div>
         </div>
         <div class="d-flex align-items-center">
-          <div class="input-group input-group-sm me-2" style="width: 120px;">
-            <button class="btn btn-outline-secondary decrease-quantity" type="button" data-index="${index}">-</button>
-            <input type="number" class="form-control text-center item-quantity" value="${item.bulkCount || 1}" 
-                   min="1" max="${maxQuantity}" data-index="${index}">
-            <button class="btn btn-outline-secondary increase-quantity" type="button" data-index="${index}">+</button>
-          </div>
           <button class="btn btn-sm btn-outline-danger remove-bulk-item" data-index="${index}">
             <i class="fas fa-times"></i>
           </button>
@@ -527,37 +776,40 @@ function updateBulkItemsDisplay() {
     container.appendChild(itemElement);
   });
   
-
-  document.querySelectorAll('.decrease-quantity').forEach(btn => {
-    btn.addEventListener('click', function() {
-      const index = parseInt(this.getAttribute('data-index'));
-      decreaseBulkItemQuantity(index);
-    });
-  });
-  
-  document.querySelectorAll('.increase-quantity').forEach(btn => {
-    btn.addEventListener('click', function() {
-      const index = parseInt(this.getAttribute('data-index'));
-      increaseBulkItemQuantity(index);
-    });
-  });
-  
-  document.querySelectorAll('.item-quantity').forEach(input => {
-    input.addEventListener('change', function() {
-      const index = parseInt(this.getAttribute('data-index'));
-      updateBulkItemQuantity(index, parseInt(this.value));
-    });
-  });
-  
-
+  // Set up remove buttons
   document.querySelectorAll('.remove-bulk-item').forEach(btn => {
     btn.addEventListener('click', function() {
-      const index = parseInt(this.getAttribute('data-index'));
+      const index = parseInt(this.dataset.index);
       removeBulkItemByIndex(index);
     });
   });
 }
 
+function getTransactionIcon(type) {
+  const icons = { 
+    'Restock': '•', 
+    'Check-out': '×', 
+    'Check Out for Session': '→', 
+    'Check-in': '←', 
+    'Send to Maintenance': '⚠', 
+    'Return from Maintenance': '✓',
+    'Return from Session': '←'
+  };
+  return icons[type] || '•';
+}
+
+function getTransactionLabel(type) {
+  const labels = { 
+    'Restock': 'Add Stock', 
+    'Check-out': 'Use Up', 
+    'Check Out for Session': 'Take for Session', 
+    'Check-in': 'Return Unused', 
+    'Send to Maintenance': 'Send for Repair', 
+    'Return from Maintenance': 'Return from Repair',
+    'Return from Session': 'Return from Session'
+  };
+  return labels[type] || type;
+}
 
 
 function decreaseBulkItemQuantity(index) {
@@ -625,70 +877,78 @@ function removeBulkItemByIndex(index) {
 
 
 
-function addToBulkItems(item) {
-  try {
-    const now = Date.now();
+// function addToBulkItems(item) {
+//   try {
+//     const now = Date.now();
     
  
-    if (item.lastAddedTime && (now - item.lastAddedTime) < 500) {
-      console.log('Preventing duplicate add for', item.name);
-      return;
-    }
+//     if (item.lastAddedTime && (now - item.lastAddedTime) < 500) {
+//       console.log('Preventing duplicate add for', item.name);
+//       return;
+//     }
     
-    item.lastAddedTime = now;
+//     item.lastAddedTime = now;
     
-    console.log('Adding item to bulk list:', item.name);
+//     console.log('Adding item to bulk list:', item.name);
 
-    const existingItemIndex = bulkItems.findIndex(i => i._id === item._id);
+//     const existingItemIndex = bulkItems.findIndex(i => i._id === item._id);
     
-    if (existingItemIndex >= 0) {
+//     if (existingItemIndex >= 0) {
     
-      bulkItems[existingItemIndex].bulkCount = (bulkItems[existingItemIndex].bulkCount || 1) + 1;
+//       bulkItems[existingItemIndex].bulkCount = (bulkItems[existingItemIndex].bulkCount || 1) + 1;
       
      
-      updateBulkItemsDisplay();
+//       updateBulkItemsDisplay();
       
-      showAlert(`Added another ${item.name} (total: ${bulkItems[existingItemIndex].bulkCount})`, 'success');
-    } else {
+//       showAlert(`Added another ${item.name} (total: ${bulkItems[existingItemIndex].bulkCount})`, 'success');
+//     } else {
 
-      item.bulkCount = 1;
-      bulkItems.push(item);
+//       item.bulkCount = 1;
+//       bulkItems.push(item);
       
 
-      updateBulkItemsDisplay();
+//       updateBulkItemsDisplay();
       
-      showAlert(`Added ${item.name} to bulk items`, 'success');
-    }
+//       showAlert(`Added ${item.name} to bulk items`, 'success');
+//     }
    
-    const countElement = document.getElementById('bulkItemCount');
-    if (countElement) {
-      countElement.textContent = bulkItems.length;
-    }
+//     const countElement = document.getElementById('bulkItemCount');
+//     if (countElement) {
+//       countElement.textContent = bulkItems.length;
+//     }
     
 
-    const clearBtn = document.getElementById('clearBulkItems');
-    const processBtn = document.getElementById('processBulkItems');
+//     const clearBtn = document.getElementById('clearBulkItems');
+//     const processBtn = document.getElementById('processBulkItems');
     
-    if (clearBtn) clearBtn.classList.remove('d-none');
-    if (processBtn) processBtn.classList.remove('d-none');
+//     if (clearBtn) clearBtn.classList.remove('d-none');
+//     if (processBtn) processBtn.classList.remove('d-none');
     
   
-    const container = document.getElementById('bulkItemsContainer');
-    if (container) container.classList.remove('d-none');
+//     const container = document.getElementById('bulkItemsContainer');
+//     if (container) container.classList.remove('d-none');
     
 
-    if (typeof playSuccessSound === 'function') {
-      playSuccessSound();
-    }
+//     if (typeof playSuccessSound === 'function') {
+//       playSuccessSound();
+//     }
     
-    console.log('Item added to bulk list successfully');
+//     console.log('Item added to bulk list successfully');
+//   } catch (error) {
+//     console.error('Error in addToBulkItems:', error);
+//     throw error;
+//   }
+//   console.log('addToBulkItems called from:', new Error().stack);
+// }
+function addToBulkItems(item) {
+  try {
+    console.log('Opening transaction picker for:', item.name);
+    openBulkItemTransactionPicker(item);
   } catch (error) {
     console.error('Error in addToBulkItems:', error);
-    throw error;
+    showAlert('Error adding item: ' + error.message, 'danger');
   }
-  console.log('addToBulkItems called from:', new Error().stack);
 }
-
 
 
 function removeBulkItem(itemId) {
@@ -1728,15 +1988,76 @@ async function saveTransaction() {
 
 
 // Process all bulk items
+// function processBulkItems() {
+//   if (bulkItems.length === 0) {
+//     showAlert('No items to process', 'warning');
+//     return;
+//   }
+  
+//   // Open the bulk transaction modal
+//   openBulkTransactionModal();
+// }
 function processBulkItems() {
   if (bulkItems.length === 0) {
     showAlert('No items to process', 'warning');
     return;
   }
   
-  // Open the bulk transaction modal
-  openBulkTransactionModal();
+  processBulkItemsDirectly();
 }
+
+async function processBulkItemsDirectly() {
+  try {
+    const processBtn = document.getElementById('processBulkItems');
+    const originalText = processBtn.innerHTML;
+    processBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Processing...';
+    processBtn.disabled = true;
+    
+    let success = 0, failed = 0;
+    
+    for (let i = 0; i < bulkItems.length; i++) {
+      const item = bulkItems[i];
+      
+      const transactionData = {
+        type: item.bulkTransactionType,
+        quantity: item.bulkQuantity,
+        notes: item.bulkNotes || ''
+      };
+      
+      try {
+        const response = await fetchWithAuth(`${API_URL}/items/${item._id}/enhanced-transaction`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(transactionData)
+        });
+        
+        if (response.ok) {
+          success++;
+        } else {
+          failed++;
+        }
+      } catch (error) {
+        failed++;
+      }
+    }
+    
+    processBtn.innerHTML = originalText;
+    processBtn.disabled = false;
+    
+    if (failed === 0) {
+      showAlert(`Successfully processed ${success} transactions!`, 'success');
+      clearBulkItems();
+    } else {
+      showAlert(`Processed ${success} items, ${failed} failed`, 'warning');
+    }
+    
+  } catch (error) {
+    showAlert('Error processing bulk transactions', 'danger');
+  }
+}
+
+
+
 
 // Open the bulk transaction modal
 function openBulkTransactionModal() {
@@ -1773,38 +2094,110 @@ function openBulkTransactionModal() {
 }
 
 // Populate transaction type dropdown based on items
+// function populateBulkTransactionTypes() {
+//   const typeSelect = document.getElementById('bulkTransactionType');
+//   typeSelect.innerHTML = '<option value="">Select Transaction Type</option>';
+  
+//   // Determine common categories
+//   const hasConsumables = bulkItems.some(item => item.category === 'Consumable');
+//   const hasEquipment = bulkItems.some(item => item.category !== 'Consumable');
+  
+
+//   if (hasConsumables && hasEquipment) {
+//     typeSelect.innerHTML += `
+//       <option value="Stock Addition">Add Stock</option>
+//       <option value="Stock Removal">Remove Stock</option>
+//     `;
+//   } else if (hasConsumables) {
+//     // Consumable operations
+//     typeSelect.innerHTML += `
+//       <option value="Stock Addition">Add Stock</option>
+//       <option value="Stock Removal">Remove Stock</option>
+//     `;
+//   } else {
+//     // Equipment operations
+//     typeSelect.innerHTML += `
+//       <option value="Stock Addition">Add Stock</option>
+//       <option value="Stock Removal">Remove Stock</option>
+//       <option value="Relocate">Relocate</option>
+//       <option value="Check Out for Session">Use in Session</option>
+//       <option value="Rent Out">Rent Out</option>
+//       <option value="Send to Maintenance">Send to Maintenance</option>
+//     `;
+    
+
+//     const hasMaintenanceItems = bulkItems.some(item => item.currentState?.inMaintenance > 0);
+//     const hasSessionItems = bulkItems.some(item => item.currentState?.inSession > 0);
+//     const hasRentedItems = bulkItems.some(item => item.currentState?.rented > 0);
+    
+//     if (hasMaintenanceItems) {
+//       typeSelect.innerHTML += `<option value="Return from Maintenance">Return from Maintenance</option>`;
+//     }
+    
+//     if (hasSessionItems) {
+//       typeSelect.innerHTML += `<option value="Return from Session">Return from Session</option>`;
+//     }
+    
+//     if (hasRentedItems) {
+//       typeSelect.innerHTML += `<option value="Return from Rental">Return from Rental</option>`;
+//     }
+//   }
+
+//   typeSelect.addEventListener('change', function() {
+//     updateBulkTransactionForm(this.value);
+//   });
+// }
+
+
+// Fixed populateBulkTransactionTypes function - scanner.js
 function populateBulkTransactionTypes() {
   const typeSelect = document.getElementById('bulkTransactionType');
   typeSelect.innerHTML = '<option value="">Select Transaction Type</option>';
   
-  // Determine common categories
+  // Determine what types of items we have
   const hasConsumables = bulkItems.some(item => item.category === 'Consumable');
   const hasEquipment = bulkItems.some(item => item.category !== 'Consumable');
   
-
+  console.log('Bulk items analysis:', { hasConsumables, hasEquipment, totalItems: bulkItems.length });
+  
+  // Add transaction options based on item types
   if (hasConsumables && hasEquipment) {
+    // MIXED ITEMS - Only common operations
     typeSelect.innerHTML += `
-      <option value="Stock Addition">Add Stock</option>
-      <option value="Stock Removal">Remove Stock</option>
+      <option value="Restock">Add Stock</option>
+      <option value="Stock Removal">Remove Stock (Disposal)</option>
     `;
   } else if (hasConsumables) {
-    // Consumable operations
+    // CONSUMABLES ONLY
     typeSelect.innerHTML += `
-      <option value="Stock Addition">Add Stock</option>
-      <option value="Stock Removal">Remove Stock</option>
+      <option value="Restock">Add Stock</option>
+      <option value="Check-out">Use Items (Permanent)</option>
+      <option value="Check Out for Session">Take for Session (Returnable)</option>
+      <option value="Stock Removal">Remove Stock (Disposal)</option>
+      <option value="Stock Adjustment">Adjust Stock (Correction)</option>
     `;
+    
+    // Check if any consumables have items in session
+    const hasSessionItems = bulkItems.some(item => 
+      item.currentState?.inSession > 0
+    );
+    
+    if (hasSessionItems) {
+      typeSelect.innerHTML += `<option value="Check-in">Return Unused from Session</option>`;
+    }
+    
   } else {
-    // Equipment operations
+    // EQUIPMENT ONLY
     typeSelect.innerHTML += `
-      <option value="Stock Addition">Add Stock</option>
-      <option value="Stock Removal">Remove Stock</option>
-      <option value="Relocate">Relocate</option>
+      <option value="Restock">Add Equipment</option>
+      <option value="Stock Removal">Remove Equipment (Disposal/Sale)</option>
+      <option value="Relocate">Relocate Items</option>
       <option value="Check Out for Session">Use in Session</option>
       <option value="Rent Out">Rent Out</option>
       <option value="Send to Maintenance">Send to Maintenance</option>
     `;
     
-
+    // Check for return options
     const hasMaintenanceItems = bulkItems.some(item => item.currentState?.inMaintenance > 0);
     const hasSessionItems = bulkItems.some(item => item.currentState?.inSession > 0);
     const hasRentedItems = bulkItems.some(item => item.currentState?.rented > 0);
@@ -1822,10 +2215,787 @@ function populateBulkTransactionTypes() {
     }
   }
 
+  // Set up change event listener
   typeSelect.addEventListener('change', function() {
     updateBulkTransactionForm(this.value);
   });
 }
+
+// Fixed updateBulkTransactionForm function
+function updateBulkTransactionForm(type) {
+  console.log('Updating bulk form for transaction type:', type);
+  
+  // Get all form groups
+  const fromLocationGroup = document.getElementById('bulkFromLocationGroup');
+  const toLocationGroup = document.getElementById('bulkToLocationGroup');
+  const sessionGroup = document.getElementById('bulkSessionGroup');
+  const rentalGroup = document.getElementById('bulkRentalGroup');
+  const maintenanceGroup = document.getElementById('bulkMaintenanceGroup');
+  
+  // Hide all groups first
+  if (fromLocationGroup) fromLocationGroup.style.display = 'none';
+  if (toLocationGroup) toLocationGroup.style.display = 'none';
+  if (sessionGroup) sessionGroup.style.display = 'none';
+  if (rentalGroup) rentalGroup.style.display = 'none';
+  if (maintenanceGroup) maintenanceGroup.style.display = 'none';
+  
+  // Show relevant groups based on transaction type
+  switch (type) {
+    case 'Restock':
+    case 'Stock Addition':
+      // Adding stock - show destination
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      break;
+      
+    case 'Check-out':
+    case 'Stock Consumption':
+      // Using items - show destination
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      break;
+      
+    case 'Stock Removal':
+    case 'Remove Stock':
+      // Removing stock - show source
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      break;
+      
+    case 'Relocate':
+      // Moving items - show both locations
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      break;
+      
+    case 'Check Out for Session':
+      // Session use - show locations and session details
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      if (sessionGroup) sessionGroup.style.display = 'block';
+      break;
+      
+    case 'Return from Session':
+    case 'Check-in':
+      // Returning from session - show source and session details
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (sessionGroup) sessionGroup.style.display = 'block';
+      break;
+      
+    case 'Rent Out':
+      // Renting out - show source and rental details
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (rentalGroup) rentalGroup.style.display = 'block';
+      break;
+      
+    case 'Return from Rental':
+      // Returning from rental - show source and rental details
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (rentalGroup) rentalGroup.style.display = 'block';
+      break;
+      
+    case 'Send to Maintenance':
+    case 'Maintenance':
+      // Sending to maintenance - show source and maintenance details
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (maintenanceGroup) maintenanceGroup.style.display = 'block';
+      break;
+      
+    case 'Return from Maintenance':
+      // Returning from maintenance - show source and maintenance details
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (maintenanceGroup) maintenanceGroup.style.display = 'block';
+      break;
+  }
+
+  // Update quantity limits for all items
+  updateBulkQuantityLimits(type);
+}
+
+
+
+
+
+function updateBulkQuantityLimits(type) {
+  console.log('Updating bulk quantity limits for type:', type);
+  
+  let updatedDisplay = false;
+  
+  // Update max quantities for each item
+  bulkItems.forEach((item, index) => {
+    const oldMax = getMaxQuantityForItem(item);
+    let newMax;
+    
+    // Calculate new max based on transaction type and item category
+    if (item.category === 'Consumable') {
+      switch(type) {
+        case 'Restock':
+        case 'Stock Addition':
+          newMax = 9999; // No limit for adding stock
+          break;
+        case 'Check-out':
+        case 'Stock Consumption':
+        case 'Stock Removal':
+        case 'Remove Stock':
+        case 'Check Out for Session':
+          newMax = item.availableQuantity || item.quantity;
+          break;
+        case 'Return from Session':
+        case 'Check-in':
+          newMax = item.currentState?.inSession || 0;
+          break;
+        default:
+          newMax = item.availableQuantity || item.quantity;
+      }
+    } else {
+      // Equipment logic
+      switch(type) {
+        case 'Restock':
+        case 'Stock Addition':
+          newMax = 9999;
+          break;
+        case 'Stock Removal':
+        case 'Remove Stock':
+        case 'Relocate':
+        case 'Check Out for Session':
+        case 'Rent Out':
+        case 'Send to Maintenance':
+        case 'Maintenance':
+          newMax = item.availableQuantity || item.quantity;
+          break;
+        case 'Return from Session':
+          newMax = item.currentState?.inSession || 0;
+          break;
+        case 'Return from Rental':
+          newMax = item.currentState?.rented || 0;
+          break;
+        case 'Return from Maintenance':
+          newMax = item.currentState?.inMaintenance || 0;
+          break;
+        default:
+          newMax = 1;
+      }
+    }
+    
+    // Update the item's max quantity
+    if (oldMax !== newMax) {
+      item.maxForTransaction = newMax;
+      
+      // Adjust bulk count if it exceeds new max
+      if (item.bulkCount > newMax) {
+        item.bulkCount = Math.max(1, newMax);
+        updatedDisplay = true;
+      }
+    }
+  });
+  
+  // Update the display if quantities changed
+  if (updatedDisplay) {
+    updateBulkItemsDisplay();
+  }
+  
+  // Show warning for items that can't be processed
+  const zeroMaxItems = bulkItems.filter(item => (item.maxForTransaction || 0) === 0);
+  if (zeroMaxItems.length > 0) {
+    let warningMsg = `Warning: The following items cannot be processed with "${type}":`;
+    zeroMaxItems.forEach(item => {
+      warningMsg += `<br>• ${item.name} (${item.category})`;
+    });
+    
+    showAlert(warningMsg, 'warning', 'bulkTransactionAlerts');
+  } else {
+    // Clear any existing warnings
+    const alertsContainer = document.getElementById('bulkTransactionAlerts');
+    if (alertsContainer) {
+      alertsContainer.innerHTML = '';
+    }
+  }
+}
+
+// Fixed updateBulkQuantityLimits function
+// function updateBulkQuantityLimits(type) {
+//   console.log('Updating bulk quantity limits for type:', type);
+  
+//   let updatedDisplay = false;
+  
+//   // Update max quantities for each item
+//   bulkItems.forEach((item, index) => {
+//     const oldMax = getMaxQuantityForItem(item);
+//     let newMax;
+    
+//     // Calculate new max based on transaction type and item category
+//     if (item.category === 'Consumable') {
+//       switch(type) {
+//         case 'Restock':
+//         case 'Stock Addition':
+//           newMax = 9999; // No limit for adding stock
+//           break;
+//         case 'Check-out':
+//         case 'Stock Consumption':
+//         case 'Stock Removal':
+//         case 'Remove Stock':
+//         case 'Check Out for Session':
+//           newMax = item.availableQuantity || item.quantity;
+//           break;
+//         case 'Return from Session':
+//         case 'Check-in':
+//           newMax = item.currentState?.inSession || 0;
+//           break;
+//         default:
+//           newMax = item.availableQuantity || item.quantity;
+//       }
+//     } else {
+//       // Equipment logic
+//       switch(type) {
+//         case 'Restock':
+//         case 'Stock Addition':
+//           newMax = 9999;
+//           break;
+//         case 'Stock Removal':
+//         case 'Remove Stock':
+//         case 'Relocate':
+//         case 'Check Out for Session':
+//         case 'Rent Out':
+//         case 'Send to Maintenance':
+//         case 'Maintenance':
+//           newMax = item.availableQuantity || item.quantity;
+//           break;
+//         case 'Return from Session':
+//           newMax = item.currentState?.inSession || 0;
+//           break;
+//         case 'Return from Rental':
+//           newMax = item.currentState?.rented || 0;
+//           break;
+//         case 'Return from Maintenance':
+//           newMax = item.currentState?.inMaintenance || 0;
+//           break;
+//         default:
+//           newMax = 1;
+//       }
+//     }
+    
+//     // Update the item's max quantity
+//     if (oldMax !== newMax) {
+//       item.maxForTransaction = newMax;
+      
+//       // Adjust bulk count if it exceeds new max
+//       if (item.bulkCount > newMax) {
+//         item.bulkCount = Math.max(1, newMax);
+//         updatedDisplay = true;
+//       }
+//     }
+//   });
+  
+//   // Update the display if quantities changed
+//   if (updatedDisplay) {
+//     updateBulkItemsDisplay();
+//   }
+  
+//   // Show warning for items that can't be processed
+//   const zeroMaxItems = bulkItems.filter(item => (item.maxForTransaction || 0) === 0);
+//   if (zeroMaxItems.length > 0) {
+//     let warningMsg = `Warning: The following items cannot be processed with "${type}":`;
+//     zeroMaxItems.forEach(item => {
+//       warningMsg += `<br>• ${item.name} (${item.category})`;
+//     });
+    
+//     showAlert(warningMsg, 'warning', 'bulkTransactionAlerts');
+//   } else {
+//     // Clear any existing warnings
+//     const alertsContainer = document.getElementById('bulkTransactionAlerts');
+//     if (alertsContainer) {
+//       alertsContainer.innerHTML = '';
+//     }
+//   }
+// }
+
+
+
+
+
+
+
+
+// Fixed saveBulkTransaction function with new transaction types
+async function saveBulkTransaction() {
+  try {
+    console.log('=== BULK TRANSACTION START ===');
+    
+    // Get form data
+    const type = document.getElementById('bulkTransactionType').value;
+    const fromLocation = document.getElementById('bulkFromLocation').value;
+    const toLocation = document.getElementById('bulkToLocation').value;
+    const notes = document.getElementById('bulkTransactionNotes').value;
+    
+    console.log('Bulk transaction data:', { type, fromLocation, toLocation, notes });
+    
+    // Validate transaction type
+    if (!type) {
+      showAlert('Please select a transaction type', 'danger', 'bulkTransactionAlerts');
+      return;
+    }
+
+    // Build base transaction data
+    const baseTransaction = {
+      type,
+      notes,
+      fromLocation: fromLocation || undefined,
+      toLocation: toLocation || undefined
+    };
+
+    // Add session data if visible
+    const sessionGroup = document.getElementById('bulkSessionGroup');
+    if (sessionGroup && sessionGroup.style.display !== 'none') {
+      const sessionName = document.getElementById('bulkSessionName').value;
+      const sessionLocation = document.getElementById('bulkSessionLocation').value;
+      
+      if (sessionName || sessionLocation) {
+        baseTransaction.session = {
+          name: sessionName || 'Unnamed Session',
+          location: sessionLocation || 'Unknown Location'
+        };
+      }
+    }
+    
+    // Add rental data if visible
+    const rentalGroup = document.getElementById('bulkRentalGroup');
+    if (rentalGroup && rentalGroup.style.display !== 'none') {
+      const rentedTo = document.getElementById('bulkRentedTo').value;
+      const expectedReturnDate = document.getElementById('bulkExpectedReturnDate').value;
+      
+      if (type === 'Rent Out' && !rentedTo) {
+        showAlert('Please specify who the items are rented to', 'danger', 'bulkTransactionAlerts');
+        return;
+      }
+      
+      if (rentedTo) {
+        baseTransaction.rental = {
+          rentedTo,
+          expectedReturnDate: expectedReturnDate || null
+        };
+      }
+    }
+    
+    // Add maintenance data if visible
+    const maintenanceGroup = document.getElementById('bulkMaintenanceGroup');
+    if (maintenanceGroup && maintenanceGroup.style.display !== 'none') {
+      const provider = document.getElementById('bulkMaintenanceProvider').value;
+      const expectedEndDate = document.getElementById('bulkExpectedEndDate').value;
+      
+      if (provider || expectedEndDate) {
+        baseTransaction.maintenance = {
+          provider: provider || '',
+          expectedEndDate: expectedEndDate || null
+        };
+      }
+    }
+    
+    console.log('Base transaction:', baseTransaction);
+    
+    // Show loading state
+    const saveBtn = document.getElementById('saveBulkTransactionBtn');
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Processing...';
+    saveBtn.disabled = true;
+    
+    // Add progress tracking
+    const progressContainer = document.createElement('div');
+    progressContainer.className = 'mt-4';
+    progressContainer.innerHTML = `
+      <h6>Processing Items...</h6>
+      <div class="progress mb-3">
+        <div id="bulkProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+             role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+      </div>
+      <div id="bulkProgressText" class="small text-muted">Preparing to process items...</div>
+    `;
+    
+    const form = document.getElementById('bulkTransactionForm');
+    form.appendChild(progressContainer);
+    
+    // Process results tracking
+    const results = {
+      success: 0,
+      failed: 0,
+      skipped: 0,
+      errors: []
+    };
+    
+    const totalItems = bulkItems.length;
+    
+    // Process each item
+    for (let i = 0; i < bulkItems.length; i++) {
+      const item = bulkItems[i];
+      const itemQuantity = item.bulkCount || 1;
+      
+      // Update progress
+      const progressPercent = Math.round((i / totalItems) * 100);
+      document.getElementById('bulkProgressBar').style.width = `${progressPercent}%`;
+      document.getElementById('bulkProgressBar').setAttribute('aria-valuenow', progressPercent);
+      document.getElementById('bulkProgressText').textContent = 
+        `Processing item ${i + 1} of ${totalItems}: ${item.name} (quantity: ${itemQuantity})`;
+      
+      // Skip items that can't be processed
+      if ((item.maxForTransaction || 0) === 0) {
+        results.skipped++;
+        continue;
+      }
+      
+      // Create transaction data for this item
+      const transactionData = {
+        ...baseTransaction,
+        quantity: itemQuantity
+      };
+      
+      console.log(`Processing item ${i + 1}:`, item.name, transactionData);
+      
+      try {
+        // Send transaction to backend
+        const response = await fetchWithAuth(`${API_URL}/items/${item._id}/enhanced-transaction`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(transactionData)
+        });
+        
+        if (response.ok) {
+          results.success++;
+          console.log(`Successfully processed: ${item.name}`);
+        } else {
+          results.failed++;
+          const errorData = await response.json();
+          results.errors.push({
+            item: item.name,
+            error: errorData.message || 'Unknown error'
+          });
+          console.error(`Failed to process ${item.name}:`, errorData.message);
+        }
+      } catch (error) {
+        console.error(`Error processing item ${item.name}:`, error);
+        results.failed++;
+        results.errors.push({
+          item: item.name,
+          error: error.message || 'Network error'
+        });
+      }
+    }
+    
+    // Update progress to complete
+    document.getElementById('bulkProgressBar').style.width = '100%';
+    document.getElementById('bulkProgressBar').setAttribute('aria-valuenow', 100);
+    document.getElementById('bulkProgressBar').classList.remove('progress-bar-animated');
+    document.getElementById('bulkProgressText').textContent = 'Processing complete!';
+    
+    // Reset button state
+    saveBtn.innerHTML = 'Process All Items';
+    saveBtn.disabled = false;
+    
+    // Show results
+    const resultsContainer = document.createElement('div');
+    resultsContainer.className = 'mt-4 alert ' + (results.failed > 0 ? 'alert-warning' : 'alert-success');
+    
+    let resultsHtml = `
+      <h5><i class="fas ${results.failed > 0 ? 'fa-exclamation-triangle' : 'fa-check-circle'} me-2"></i>Transaction Results</h5>
+      <p>Successfully processed ${results.success} out of ${results.success + results.failed + results.skipped} items.</p>
+    `;
+    
+    if (results.skipped > 0) {
+      resultsHtml += `<p>${results.skipped} items were skipped because they couldn't be processed with this transaction type.</p>`;
+    }
+    
+    if (results.failed > 0) {
+      resultsHtml += '<div class="mt-3"><strong>Errors:</strong><ul>';
+      results.errors.forEach(error => {
+        resultsHtml += `<li>${error.item}: ${error.error}</li>`;
+      });
+      resultsHtml += '</ul></div>';
+    }
+    
+    resultsContainer.innerHTML = resultsHtml;
+    form.appendChild(resultsContainer);
+    
+    console.log('=== BULK TRANSACTION COMPLETE ===');
+    console.log('Results:', results);
+    
+    // Auto-close if successful
+    if (results.failed === 0) {
+      setTimeout(() => {
+        // Close modal
+        bootstrap.Modal.getInstance(document.getElementById('bulkTransactionModal')).hide();
+        
+        // Clear bulk items
+        bulkItems = [];
+        updateBulkItemsDisplay();
+        document.getElementById('bulkItemCount').textContent = '0';
+        
+        // Hide buttons
+        document.getElementById('clearBulkItems').classList.add('d-none');
+        document.getElementById('processBulkItems').classList.add('d-none');
+        
+        // Hide container if not in bulk mode
+        if (!bulkMode) {
+          document.getElementById('bulkItemsContainer').classList.add('d-none');
+        }
+        
+        // Show success message
+        showAlert(`Successfully processed ${results.success} items!`, 'success');
+        
+        // Refocus barcode input
+        document.getElementById('barcodeInput').focus();
+      }, 3000);
+    }
+    
+  } catch (error) {
+    console.error('Bulk transaction error:', error);
+    showAlert('An error occurred while processing bulk transactions: ' + error.message, 'danger', 'bulkTransactionAlerts');
+    
+    // Reset button state
+    const saveBtn = document.getElementById('saveBulkTransactionBtn');
+    if (saveBtn) {
+      saveBtn.innerHTML = 'Process All Items';
+      saveBtn.disabled = false;
+    }
+  }
+}
+
+// Fixed saveBulkTransaction function with new transaction types
+// async function saveBulkTransaction() {
+//   try {
+//     console.log('=== BULK TRANSACTION START ===');
+    
+//     // Get form data
+//     const type = document.getElementById('bulkTransactionType').value;
+//     const fromLocation = document.getElementById('bulkFromLocation').value;
+//     const toLocation = document.getElementById('bulkToLocation').value;
+//     const notes = document.getElementById('bulkTransactionNotes').value;
+    
+//     console.log('Bulk transaction data:', { type, fromLocation, toLocation, notes });
+    
+//     // Validate transaction type
+//     if (!type) {
+//       showAlert('Please select a transaction type', 'danger', 'bulkTransactionAlerts');
+//       return;
+//     }
+
+//     // Build base transaction data
+//     const baseTransaction = {
+//       type,
+//       notes,
+//       fromLocation: fromLocation || undefined,
+//       toLocation: toLocation || undefined
+//     };
+
+//     // Add session data if visible
+//     const sessionGroup = document.getElementById('bulkSessionGroup');
+//     if (sessionGroup && sessionGroup.style.display !== 'none') {
+//       const sessionName = document.getElementById('bulkSessionName').value;
+//       const sessionLocation = document.getElementById('bulkSessionLocation').value;
+      
+//       if (sessionName || sessionLocation) {
+//         baseTransaction.session = {
+//           name: sessionName || 'Unnamed Session',
+//           location: sessionLocation || 'Unknown Location'
+//         };
+//       }
+//     }
+    
+//     // Add rental data if visible
+//     const rentalGroup = document.getElementById('bulkRentalGroup');
+//     if (rentalGroup && rentalGroup.style.display !== 'none') {
+//       const rentedTo = document.getElementById('bulkRentedTo').value;
+//       const expectedReturnDate = document.getElementById('bulkExpectedReturnDate').value;
+      
+//       if (type === 'Rent Out' && !rentedTo) {
+//         showAlert('Please specify who the items are rented to', 'danger', 'bulkTransactionAlerts');
+//         return;
+//       }
+      
+//       if (rentedTo) {
+//         baseTransaction.rental = {
+//           rentedTo,
+//           expectedReturnDate: expectedReturnDate || null
+//         };
+//       }
+//     }
+    
+//     // Add maintenance data if visible
+//     const maintenanceGroup = document.getElementById('bulkMaintenanceGroup');
+//     if (maintenanceGroup && maintenanceGroup.style.display !== 'none') {
+//       const provider = document.getElementById('bulkMaintenanceProvider').value;
+//       const expectedEndDate = document.getElementById('bulkExpectedEndDate').value;
+      
+//       if (provider || expectedEndDate) {
+//         baseTransaction.maintenance = {
+//           provider: provider || '',
+//           expectedEndDate: expectedEndDate || null
+//         };
+//       }
+//     }
+    
+//     console.log('Base transaction:', baseTransaction);
+    
+//     // Show loading state
+//     const saveBtn = document.getElementById('saveBulkTransactionBtn');
+//     saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Processing...';
+//     saveBtn.disabled = true;
+    
+//     // Add progress tracking
+//     const progressContainer = document.createElement('div');
+//     progressContainer.className = 'mt-4';
+//     progressContainer.innerHTML = `
+//       <h6>Processing Items...</h6>
+//       <div class="progress mb-3">
+//         <div id="bulkProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+//              role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+//       </div>
+//       <div id="bulkProgressText" class="small text-muted">Preparing to process items...</div>
+//     `;
+    
+//     const form = document.getElementById('bulkTransactionForm');
+//     form.appendChild(progressContainer);
+    
+//     // Process results tracking
+//     const results = {
+//       success: 0,
+//       failed: 0,
+//       skipped: 0,
+//       errors: []
+//     };
+    
+//     const totalItems = bulkItems.length;
+    
+//     // Process each item
+//     for (let i = 0; i < bulkItems.length; i++) {
+//       const item = bulkItems[i];
+//       const itemQuantity = item.bulkCount || 1;
+      
+//       // Update progress
+//       const progressPercent = Math.round((i / totalItems) * 100);
+//       document.getElementById('bulkProgressBar').style.width = `${progressPercent}%`;
+//       document.getElementById('bulkProgressBar').setAttribute('aria-valuenow', progressPercent);
+//       document.getElementById('bulkProgressText').textContent = 
+//         `Processing item ${i + 1} of ${totalItems}: ${item.name} (quantity: ${itemQuantity})`;
+      
+//       // Skip items that can't be processed
+//       if ((item.maxForTransaction || 0) === 0) {
+//         results.skipped++;
+//         continue;
+//       }
+      
+//       // Create transaction data for this item
+//       const transactionData = {
+//         ...baseTransaction,
+//         quantity: itemQuantity
+//       };
+      
+//       console.log(`Processing item ${i + 1}:`, item.name, transactionData);
+      
+//       try {
+//         // Send transaction to backend
+//         const response = await fetchWithAuth(`${API_URL}/items/${item._id}/enhanced-transaction`, {
+//           method: 'POST',
+//           headers: {
+//             'Content-Type': 'application/json'
+//           },
+//           body: JSON.stringify(transactionData)
+//         });
+        
+//         if (response.ok) {
+//           results.success++;
+//           console.log(`Successfully processed: ${item.name}`);
+//         } else {
+//           results.failed++;
+//           const errorData = await response.json();
+//           results.errors.push({
+//             item: item.name,
+//             error: errorData.message || 'Unknown error'
+//           });
+//           console.error(`Failed to process ${item.name}:`, errorData.message);
+//         }
+//       } catch (error) {
+//         console.error(`Error processing item ${item.name}:`, error);
+//         results.failed++;
+//         results.errors.push({
+//           item: item.name,
+//           error: error.message || 'Network error'
+//         });
+//       }
+//     }
+    
+//     // Update progress to complete
+//     document.getElementById('bulkProgressBar').style.width = '100%';
+//     document.getElementById('bulkProgressBar').setAttribute('aria-valuenow', 100);
+//     document.getElementById('bulkProgressBar').classList.remove('progress-bar-animated');
+//     document.getElementById('bulkProgressText').textContent = 'Processing complete!';
+    
+//     // Reset button state
+//     saveBtn.innerHTML = 'Process All Items';
+//     saveBtn.disabled = false;
+    
+//     // Show results
+//     const resultsContainer = document.createElement('div');
+//     resultsContainer.className = 'mt-4 alert ' + (results.failed > 0 ? 'alert-warning' : 'alert-success');
+    
+//     let resultsHtml = `
+//       <h5><i class="fas ${results.failed > 0 ? 'fa-exclamation-triangle' : 'fa-check-circle'} me-2"></i>Transaction Results</h5>
+//       <p>Successfully processed ${results.success} out of ${results.success + results.failed + results.skipped} items.</p>
+//     `;
+    
+//     if (results.skipped > 0) {
+//       resultsHtml += `<p>${results.skipped} items were skipped because they couldn't be processed with this transaction type.</p>`;
+//     }
+    
+//     if (results.failed > 0) {
+//       resultsHtml += '<div class="mt-3"><strong>Errors:</strong><ul>';
+//       results.errors.forEach(error => {
+//         resultsHtml += `<li>${error.item}: ${error.error}</li>`;
+//       });
+//       resultsHtml += '</ul></div>';
+//     }
+    
+//     resultsContainer.innerHTML = resultsHtml;
+//     form.appendChild(resultsContainer);
+    
+//     console.log('=== BULK TRANSACTION COMPLETE ===');
+//     console.log('Results:', results);
+    
+//     // Auto-close if successful
+//     if (results.failed === 0) {
+//       setTimeout(() => {
+//         // Close modal
+//         bootstrap.Modal.getInstance(document.getElementById('bulkTransactionModal')).hide();
+        
+//         // Clear bulk items
+//         bulkItems = [];
+//         updateBulkItemsDisplay();
+//         document.getElementById('bulkItemCount').textContent = '0';
+        
+//         // Hide buttons
+//         document.getElementById('clearBulkItems').classList.add('d-none');
+//         document.getElementById('processBulkItems').classList.add('d-none');
+        
+//         // Hide container if not in bulk mode
+//         if (!bulkMode) {
+//           document.getElementById('bulkItemsContainer').classList.add('d-none');
+//         }
+        
+//         // Show success message
+//         showAlert(`Successfully processed ${results.success} items!`, 'success');
+        
+//         // Refocus barcode input
+//         document.getElementById('barcodeInput').focus();
+//       }, 3000);
+//     }
+    
+//   } catch (error) {
+//     console.error('Bulk transaction error:', error);
+//     showAlert('An error occurred while processing bulk transactions: ' + error.message, 'danger', 'bulkTransactionAlerts');
+    
+//     // Reset button state
+//     const saveBtn = document.getElementById('saveBulkTransactionBtn');
+//     if (saveBtn) {
+//       saveBtn.innerHTML = 'Process All Items';
+//       saveBtn.disabled = false;
+//     }
+//   }
+// }
 
 
 function populateBulkLocationDropdowns() {
@@ -1856,7 +3026,10 @@ function populateBulkLocationDropdowns() {
 }
 
 
+
 function updateBulkTransactionForm(type) {
+  console.log('Updating bulk form for transaction type:', type);
+  
   // Get all form groups
   const fromLocationGroup = document.getElementById('bulkFromLocationGroup');
   const toLocationGroup = document.getElementById('bulkToLocationGroup');
@@ -1865,55 +3038,142 @@ function updateBulkTransactionForm(type) {
   const maintenanceGroup = document.getElementById('bulkMaintenanceGroup');
   
   // Hide all groups first
-  fromLocationGroup.style.display = 'none';
-  toLocationGroup.style.display = 'none';
-  sessionGroup.style.display = 'none';
-  rentalGroup.style.display = 'none';
-  maintenanceGroup.style.display = 'none';
+  if (fromLocationGroup) fromLocationGroup.style.display = 'none';
+  if (toLocationGroup) toLocationGroup.style.display = 'none';
+  if (sessionGroup) sessionGroup.style.display = 'none';
+  if (rentalGroup) rentalGroup.style.display = 'none';
+  if (maintenanceGroup) maintenanceGroup.style.display = 'none';
   
   // Show relevant groups based on transaction type
   switch (type) {
+    case 'Restock':
     case 'Stock Addition':
-      toLocationGroup.style.display = 'block';
+      // Adding stock - show destination
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      break;
+      
+    case 'Check-out':
+    case 'Stock Consumption':
+      // Using items - show destination
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
       break;
       
     case 'Stock Removal':
-      fromLocationGroup.style.display = 'block';
+    case 'Remove Stock':
+      // Removing stock - show source
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
       break;
       
     case 'Relocate':
-      fromLocationGroup.style.display = 'block';
-      toLocationGroup.style.display = 'block';
+      // Moving items - show both locations
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
       break;
       
     case 'Check Out for Session':
-      sessionGroup.style.display = 'block';
-      toLocationGroup.style.display = 'block';
+      // Session use - show locations and session details
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      if (sessionGroup) sessionGroup.style.display = 'block';
       break;
       
     case 'Return from Session':
-      sessionGroup.style.display = 'block';
+    case 'Check-in':
+      // Returning from session - show source and session details
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (sessionGroup) sessionGroup.style.display = 'block';
       break;
       
     case 'Rent Out':
-      rentalGroup.style.display = 'block';
+      // Renting out - show source and rental details
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (rentalGroup) rentalGroup.style.display = 'block';
       break;
       
     case 'Return from Rental':
-      rentalGroup.style.display = 'block';
+      // Returning from rental - show source and rental details
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (rentalGroup) rentalGroup.style.display = 'block';
       break;
       
     case 'Send to Maintenance':
-      maintenanceGroup.style.display = 'block';
+    case 'Maintenance':
+      // Sending to maintenance - show source and maintenance details
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (maintenanceGroup) maintenanceGroup.style.display = 'block';
       break;
       
     case 'Return from Maintenance':
-      maintenanceGroup.style.display = 'block';
+      // Returning from maintenance - show source and maintenance details
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (maintenanceGroup) maintenanceGroup.style.display = 'block';
       break;
   }
 
-  updateMaxQuantitiesForTransactionType(type);
+  // Update quantity limits for all items
+  updateBulkQuantityLimits(type);
 }
+
+
+
+// function updateBulkTransactionForm(type) {
+//   // Get all form groups
+//   const fromLocationGroup = document.getElementById('bulkFromLocationGroup');
+//   const toLocationGroup = document.getElementById('bulkToLocationGroup');
+//   const sessionGroup = document.getElementById('bulkSessionGroup');
+//   const rentalGroup = document.getElementById('bulkRentalGroup');
+//   const maintenanceGroup = document.getElementById('bulkMaintenanceGroup');
+  
+//   // Hide all groups first
+//   fromLocationGroup.style.display = 'none';
+//   toLocationGroup.style.display = 'none';
+//   sessionGroup.style.display = 'none';
+//   rentalGroup.style.display = 'none';
+//   maintenanceGroup.style.display = 'none';
+  
+//   // Show relevant groups based on transaction type
+//   switch (type) {
+//     case 'Stock Addition':
+//       toLocationGroup.style.display = 'block';
+//       break;
+      
+//     case 'Stock Removal':
+//       fromLocationGroup.style.display = 'block';
+//       break;
+      
+//     case 'Relocate':
+//       fromLocationGroup.style.display = 'block';
+//       toLocationGroup.style.display = 'block';
+//       break;
+      
+//     case 'Check Out for Session':
+//       sessionGroup.style.display = 'block';
+//       toLocationGroup.style.display = 'block';
+//       break;
+      
+//     case 'Return from Session':
+//       sessionGroup.style.display = 'block';
+//       break;
+      
+//     case 'Rent Out':
+//       rentalGroup.style.display = 'block';
+//       break;
+      
+//     case 'Return from Rental':
+//       rentalGroup.style.display = 'block';
+//       break;
+      
+//     case 'Send to Maintenance':
+//       maintenanceGroup.style.display = 'block';
+//       break;
+      
+//     case 'Return from Maintenance':
+//       maintenanceGroup.style.display = 'block';
+//       break;
+//   }
+
+//   updateMaxQuantitiesForTransactionType(type);
+// }
 
 
 
@@ -2668,73 +3928,340 @@ function fixAllQuickButtons() {
 
 
 
-  function openQuickTransactionModalDirect(type) {
-    console.log(`Direct modal open for ${type}`);
-    if (!currentItemId) {
-      console.error('No current item ID');
-      return;
-    }
+function openQuickTransactionModalDirect(type) {
+  console.log(`Direct modal open for ${type}`);
+  if (!currentItemId) {
+    console.error('No current item ID');
+    return;
+  }
+  
+  const modal = document.getElementById('quickTransactionModal');
+  if (!modal) {
+    console.error('Modal not found!');
+    alert('Quick transaction modal not found in the page');
+    return;
+  }
+  
+  console.log('Modal found, preparing to open');
+  
+  // Get item name from details
+  const itemName = document.querySelector('#itemDetails h5') ? 
+                  document.querySelector('#itemDetails h5').textContent : 
+                  'Unknown Item';
+  
+  // Map the button action to the correct transaction type
+  let transactionType = type;
+  let modalTitle = type;
+  
+  // Map button actions to proper transaction types
+  switch (type) {
+    case 'Check-out':
+      transactionType = 'Check-out';
+      modalTitle = 'Use Items (Permanent)';
+      break;
+    case 'Maintenance':
+      transactionType = 'Check Out for Session';
+      modalTitle = 'Take for Session (Returnable)';
+      break;
+    case 'Restock':
+      transactionType = 'Restock';
+      modalTitle = 'Add Stock';
+      break;
+    case 'Check-in':
+      transactionType = 'Check-in';
+      modalTitle = 'Return Unused';
+      break;
+  }
+  
+  // Set all form values
+  document.getElementById('quickTransactionItemId').value = currentItemId;
+  document.getElementById('quickTransactionItem').value = itemName;
+  document.getElementById('quickTransactionType').value = transactionType;
+  
+  // Set modal title
+  const titleEl = document.getElementById('quickTransactionTitle');
+  if (titleEl) {
+    titleEl.textContent = modalTitle;
+  }
+  
+  // Set badge
+  const badge = document.getElementById('quickTransactionTypeBadge');
+  if (badge) {
+    badge.textContent = modalTitle;
     
-    const modal = document.getElementById('quickTransactionModal');
-    if (!modal) {
-      console.error('Modal not found!');
-      alert('Quick transaction modal not found in the page');
-      return;
-    }
-    
-    console.log('Modal found, preparing to open');
-    
-    // Get item name
-    const itemName = document.querySelector('#itemDetails h5') ? 
-                    document.querySelector('#itemDetails h5').textContent : 
-                    'Unknown Item';
-    
-    // Set all form values
-    document.getElementById('quickTransactionItemId').value = currentItemId;
-    document.getElementById('quickTransactionItem').value = itemName;
-    document.getElementById('quickTransactionType').value = type;
-    
-    // Set badge
-    const badge = document.getElementById('quickTransactionTypeBadge');
-    badge.textContent = type;
-    
-    // Configure fields based on type
-    switch (type) {
-      case 'Check-in':
-        badge.className = 'badge bg-success mb-2';
-        document.getElementById('quickFromLocationGroup').style.display = 'block';
-        document.getElementById('quickToLocationGroup').style.display = 'none';
-        break;
-      case 'Check-out':
-        badge.className = 'badge bg-warning mb-2';
-        document.getElementById('quickFromLocationGroup').style.display = 'none';
-        document.getElementById('quickToLocationGroup').style.display = 'block';
-        break;
-      case 'Maintenance':
-        badge.className = 'badge bg-info mb-2';
-        document.getElementById('quickFromLocationGroup').style.display = 'none';
-        document.getElementById('quickToLocationGroup').style.display = 'none';
-        break;
-      case 'Restock':
-        badge.className = 'badge bg-primary mb-2';
-        document.getElementById('quickFromLocationGroup').style.display = 'block';
-        document.getElementById('quickToLocationGroup').style.display = 'block';
-        break;
-    }
-    
-    // Populate locations
-    populateQuickTransactionLocations();
-    
-    // Open modal
-    console.log('Showing modal');
-    try {
-      const bsModal = new bootstrap.Modal(modal);
-      bsModal.show();
-    } catch (err) {
-      console.error('Error showing modal:', err);
-      alert('Error showing modal: ' + err.message);
+    // Set appropriate badge color
+    if (type === 'Check-out') {
+      badge.className = 'badge bg-danger mb-2';
+    } else if (type === 'Maintenance') {
+      badge.className = 'badge bg-info mb-2';
+    } else if (type === 'Restock') {
+      badge.className = 'badge bg-success mb-2';
+    } else if (type === 'Check-in') {
+      badge.className = 'badge bg-success mb-2';
     }
   }
+  
+  // Configure fields based on type
+  const fromLocationGroup = document.getElementById('quickFromLocationGroup');
+  const toLocationGroup = document.getElementById('quickToLocationGroup');
+  const sessionGroup = document.getElementById('quickSessionGroup');
+  const rentalGroup = document.getElementById('quickRentalGroup');
+  const maintenanceGroup = document.getElementById('quickMaintenanceGroup');
+  
+  // Hide all groups first
+  if (fromLocationGroup) fromLocationGroup.style.display = 'none';
+  if (toLocationGroup) toLocationGroup.style.display = 'none';
+  if (sessionGroup) sessionGroup.style.display = 'none';
+  if (rentalGroup) rentalGroup.style.display = 'none';
+  if (maintenanceGroup) maintenanceGroup.style.display = 'none';
+  
+  // Show relevant fields based on transaction type
+  switch (transactionType) {
+    case 'Check-out':
+      // Permanent consumption - only need destination
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      break;
+    case 'Check Out for Session':
+      // Session use - need session details and locations
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      if (sessionGroup) sessionGroup.style.display = 'block';
+      break;
+    case 'Restock':
+      // Adding stock - need destination
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      break;
+    case 'Check-in':
+      // Returning - need source and session details
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (sessionGroup) sessionGroup.style.display = 'block';
+      break;
+  }
+  
+  // Set default quantity
+  const quantityField = document.getElementById('quickTransactionQuantity');
+  if (quantityField) {
+    quantityField.value = 1;
+  }
+  
+  // Clear notes
+  const notesField = document.getElementById('quickTransactionNotes');
+  if (notesField) {
+    notesField.value = '';
+  }
+  
+  // Populate locations
+  populateQuickTransactionLocations();
+  
+  // Open modal
+  console.log('Showing modal');
+  try {
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+  } catch (err) {
+    console.error('Error showing modal:', err);
+    alert('Error showing modal: ' + err.message);
+  }
+}
+
+// SIMPLIFIED saveQuickTransaction function
+function saveQuickTransaction() {
+  try {
+    console.log('=== SAVE TRANSACTION START ===');
+    
+    // Get form data
+    const itemId = document.getElementById('quickTransactionItemId').value;
+    const type = document.getElementById('quickTransactionType').value;
+    const quantity = document.getElementById('quickTransactionQuantity').value;
+    const notes = document.getElementById('quickTransactionNotes').value;
+    
+    console.log('Form data:', { itemId, type, quantity, notes });
+    
+    if (!itemId || !type || !quantity || parseInt(quantity) <= 0) {
+      showAlert('Please enter a valid quantity', 'danger', 'quickTransactionAlerts');
+      return;
+    }
+    
+    // Build transaction data
+    const transactionData = {
+      type,
+      quantity: parseInt(quantity),
+      notes: notes || ''
+    };
+    
+    // Add location data if visible
+    const fromLocationGroup = document.getElementById('quickFromLocationGroup');
+    if (fromLocationGroup && fromLocationGroup.style.display !== 'none') {
+      const fromLocation = document.getElementById('quickFromLocation').value;
+      if (fromLocation) {
+        transactionData.fromLocation = fromLocation;
+      }
+    }
+    
+    const toLocationGroup = document.getElementById('quickToLocationGroup');
+    if (toLocationGroup && toLocationGroup.style.display !== 'none') {
+      const toLocation = document.getElementById('quickToLocation').value;
+      if (toLocation) {
+        transactionData.toLocation = toLocation;
+      }
+    }
+    
+    // Add session data if visible
+    const sessionGroup = document.getElementById('quickSessionGroup');
+    if (sessionGroup && sessionGroup.style.display !== 'none') {
+      const sessionName = document.getElementById('quickSessionName').value;
+      const sessionLocation = document.getElementById('quickSessionLocation').value;
+      
+      if (sessionName || sessionLocation) {
+        transactionData.session = {
+          name: sessionName || 'Unnamed Session',
+          location: sessionLocation || 'Unknown Location'
+        };
+      }
+    }
+    
+    console.log('Transaction data:', transactionData);
+    
+    // Show loading state
+    const saveBtn = document.getElementById('saveQuickTransactionBtn');
+    const originalBtnText = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Processing...';
+    saveBtn.disabled = true;
+    
+    // Send to backend
+    fetchWithAuth(`${API_URL}/items/${itemId}/enhanced-transaction`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(transactionData)
+    })
+    .then(response => {
+      console.log('Response status:', response.status);
+      
+      // Reset button state
+      saveBtn.innerHTML = originalBtnText;
+      saveBtn.disabled = false;
+      
+      if (!response.ok) {
+        return response.text().then(text => {
+          console.error('Error response:', text);
+          throw new Error(text || 'Failed to create transaction');
+        });
+      }
+      
+      return response.json();
+    })
+    .then(transaction => {
+      console.log('Transaction created:', transaction);
+      
+      // Close modal
+      const modalElement = document.getElementById('quickTransactionModal');
+      if (modalElement) {
+        const modalInstance = bootstrap.Modal.getInstance(modalElement);
+        if (modalInstance) {
+          modalInstance.hide();
+        }
+      }
+      
+      // Show success message
+      showAlert(`Transaction complete: ${transaction.type}`, 'success');
+      
+      // Reload item details
+      const barcodeInput = document.getElementById('barcodeInput');
+      if (barcodeInput && barcodeInput.value) {
+        searchItem(barcodeInput.value);
+      }
+      
+      // Refocus barcode input
+      setTimeout(() => {
+        if (barcodeInput) {
+          barcodeInput.focus();
+          barcodeInput.select();
+        }
+      }, 500);
+    })
+    .catch(error => {
+      console.error('Save quick transaction error:', error);
+      showAlert('Error: ' + error.message, 'danger', 'quickTransactionAlerts');
+      
+      // Reset button state
+      saveBtn.innerHTML = originalBtnText;
+      saveBtn.disabled = false;
+    });
+  } catch (error) {
+    console.error('Transaction error:', error);
+    showAlert('An unexpected error occurred: ' + error.message, 'danger', 'quickTransactionAlerts');
+  }
+}
+
+  // function openQuickTransactionModalDirect(type) {
+  //   console.log(`Direct modal open for ${type}`);
+  //   if (!currentItemId) {
+  //     console.error('No current item ID');
+  //     return;
+  //   }
+    
+  //   const modal = document.getElementById('quickTransactionModal');
+  //   if (!modal) {
+  //     console.error('Modal not found!');
+  //     alert('Quick transaction modal not found in the page');
+  //     return;
+  //   }
+    
+  //   console.log('Modal found, preparing to open');
+    
+  //   // Get item name
+  //   const itemName = document.querySelector('#itemDetails h5') ? 
+  //                   document.querySelector('#itemDetails h5').textContent : 
+  //                   'Unknown Item';
+    
+  //   // Set all form values
+  //   document.getElementById('quickTransactionItemId').value = currentItemId;
+  //   document.getElementById('quickTransactionItem').value = itemName;
+  //   document.getElementById('quickTransactionType').value = type;
+    
+  //   // Set badge
+  //   const badge = document.getElementById('quickTransactionTypeBadge');
+  //   badge.textContent = type;
+    
+  //   // Configure fields based on type
+  //   switch (type) {
+  //     case 'Check-in':
+  //       badge.className = 'badge bg-success mb-2';
+  //       document.getElementById('quickFromLocationGroup').style.display = 'block';
+  //       document.getElementById('quickToLocationGroup').style.display = 'none';
+  //       break;
+  //     case 'Check-out':
+  //       badge.className = 'badge bg-warning mb-2';
+  //       document.getElementById('quickFromLocationGroup').style.display = 'none';
+  //       document.getElementById('quickToLocationGroup').style.display = 'block';
+  //       break;
+  //     case 'Maintenance':
+  //       badge.className = 'badge bg-info mb-2';
+  //       document.getElementById('quickFromLocationGroup').style.display = 'none';
+  //       document.getElementById('quickToLocationGroup').style.display = 'none';
+  //       break;
+  //     case 'Restock':
+  //       badge.className = 'badge bg-primary mb-2';
+  //       document.getElementById('quickFromLocationGroup').style.display = 'block';
+  //       document.getElementById('quickToLocationGroup').style.display = 'block';
+  //       break;
+  //   }
+    
+  //   // Populate locations
+  //   populateQuickTransactionLocations();
+    
+  //   // Open modal
+  //   console.log('Showing modal');
+  //   try {
+  //     const bsModal = new bootstrap.Modal(modal);
+  //     bsModal.show();
+  //   } catch (err) {
+  //     console.error('Error showing modal:', err);
+  //     alert('Error showing modal: ' + err.message);
+  //   }
+  // }
 
 
 
@@ -2761,6 +4288,182 @@ function fixAllQuickButtons() {
 
 
 
+
+
+
+// Fixed updateTransactionButtonsForItem function - scanner.js
+// function updateTransactionButtonsForItem(item) {
+//   console.log('Updating transaction buttons for item:', item);
+  
+//   // Get references to buttons
+//   const checkInBtn = document.getElementById('checkInBtn');
+//   const checkOutBtn = document.getElementById('checkOutBtn');
+//   const maintenanceBtn = document.getElementById('maintenanceBtn');
+//   const restockBtn = document.getElementById('restockBtn');
+  
+//   // Reset all buttons
+//   [checkInBtn, checkOutBtn, maintenanceBtn, restockBtn].forEach(btn => {
+//     if (btn) {
+//       btn.disabled = true;
+//       btn.style.display = 'block'; 
+//       btn.dataset.action = '';
+//     }
+//   });
+  
+//   // Exit if no item
+//   if (!item || !item._id) {
+//     currentItemId = null;
+//     return;
+//   }
+  
+//   // Store the current item ID
+//   currentItemId = item._id;
+
+//   const availableQuantity = item.availableQuantity !== undefined ? 
+//     item.availableQuantity : item.quantity;
+  
+//   const inMaintenanceCount = item.currentState?.inMaintenance || 0;
+//   const inSessionCount = item.currentState?.inSession || 0;
+//   const rentedCount = item.currentState?.rented || 0;
+//   const itemsOut = inMaintenanceCount + inSessionCount + rentedCount;
+  
+//   if (item.category === 'Consumable') {
+//     // CONSUMABLE LOGIC - CLEAR NAMING
+    
+//     // Restock Button - Always available for adding stock
+//     if (restockBtn) {
+//       restockBtn.disabled = false;
+//       restockBtn.innerHTML = '<i class="fas fa-plus"></i><span>Add Stock</span>';
+//       restockBtn.dataset.action = 'Restock';
+//       restockBtn.title = 'Add new stock to inventory';
+//     }
+    
+//     // Check Out Button - For PERMANENT consumption (gone forever)
+//     if (checkOutBtn) {
+//       checkOutBtn.disabled = availableQuantity <= 0;
+//       checkOutBtn.innerHTML = '<i class="fas fa-times-circle"></i><span>Use Up</span>';
+//       checkOutBtn.dataset.action = 'Check-out';
+//       checkOutBtn.title = 'Use items permanently (cannot be returned)';
+//     }
+    
+//     // Maintenance Button - For TEMPORARY session use (returnable)
+//     if (maintenanceBtn) {
+//       maintenanceBtn.disabled = availableQuantity <= 0;
+//       maintenanceBtn.innerHTML = '<i class="fas fa-arrow-right"></i><span>Take for Session</span>';
+//       maintenanceBtn.dataset.action = 'Check Out for Session';
+//       maintenanceBtn.title = 'Take items for session use (can be returned unused)';
+//     }
+    
+//     // Check In Button - Return unused from sessions
+//     if (checkInBtn) {
+//       checkInBtn.disabled = inSessionCount <= 0;
+//       checkInBtn.innerHTML = '<i class="fas fa-arrow-left"></i><span>Return Unused</span>';
+//       checkInBtn.dataset.action = 'Check-in';
+//       checkInBtn.title = `Return ${inSessionCount} unused items from sessions`;
+      
+//       // Show how many can be returned
+//       if (inSessionCount > 0) {
+//         checkInBtn.innerHTML = `<i class="fas fa-arrow-left"></i><span>Return Unused (${inSessionCount})</span>`;
+//       }
+//     }
+    
+//   } else {
+//     // EQUIPMENT LOGIC - COMPLEX TRACKING
+    
+//     // Restock Button - Add new equipment
+//     if (restockBtn) {
+//       restockBtn.disabled = false;
+//       restockBtn.innerHTML = '<i class="fas fa-plus"></i><span>Add Equipment</span>';
+//       restockBtn.dataset.action = 'Restock';
+//       restockBtn.title = 'Add new equipment to inventory';
+//     }
+    
+//     // Check Out Button - For session use (always returnable for equipment)
+//     if (checkOutBtn) {
+//       checkOutBtn.disabled = availableQuantity <= 0;
+//       checkOutBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i><span>Use in Session</span>';
+//       checkOutBtn.dataset.action = 'Check Out for Session';
+//       checkOutBtn.title = 'Take equipment for session use';
+//     }
+    
+//     // Maintenance Button - Send for repairs
+//     if (maintenanceBtn) {
+//       maintenanceBtn.disabled = availableQuantity <= 0;
+//       maintenanceBtn.innerHTML = '<i class="fas fa-tools"></i><span>Send for Repair</span>';
+//       maintenanceBtn.dataset.action = 'Send to Maintenance';
+//       maintenanceBtn.title = 'Send equipment for maintenance/repair';
+//     }
+    
+//     // Check In Button - Return from various states
+//     if (checkInBtn) {
+//       checkInBtn.disabled = itemsOut <= 0;
+      
+//       // Determine what type of return based on current state
+//       if (inMaintenanceCount > 0) {
+//         checkInBtn.innerHTML = '<i class="fas fa-wrench"></i><span>Return from Repair</span>';
+//         checkInBtn.dataset.action = 'Return from Maintenance';
+//         checkInBtn.title = `Return ${inMaintenanceCount} items from maintenance`;
+//       } else if (inSessionCount > 0) {
+//         checkInBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i><span>Return from Session</span>';
+//         checkInBtn.dataset.action = 'Return from Session';
+//         checkInBtn.title = `Return ${inSessionCount} items from sessions`;
+//       } else if (rentedCount > 0) {
+//         checkInBtn.innerHTML = '<i class="fas fa-handshake"></i><span>Return from Rental</span>';
+//         checkInBtn.dataset.action = 'Return from Rental';
+//         checkInBtn.title = `Return ${rentedCount} items from rental`;
+//       } else {
+//         checkInBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i><span>Return Items</span>';
+//         checkInBtn.dataset.action = 'Check-in';
+//         checkInBtn.title = 'Return items to inventory';
+//       }
+//     }
+//   }
+  
+//   // Apply styling based on button state
+//   [checkInBtn, checkOutBtn, maintenanceBtn, restockBtn].forEach(btn => {
+//     if (btn) {
+//       if (btn.disabled) {
+//         btn.classList.add('btn-outline-secondary');
+//         btn.classList.remove('btn-outline-success', 'btn-outline-warning', 'btn-outline-info', 'btn-outline-primary', 'btn-outline-danger');
+//       } else {
+//         btn.classList.remove('btn-outline-secondary');
+        
+//         // Apply color coding based on action type
+//         if (btn === checkInBtn) {
+//           btn.classList.add('btn-outline-success'); // Green for returns
+//         } else if (btn === checkOutBtn) {
+//           if (item.category === 'Consumable') {
+//             btn.classList.add('btn-outline-danger'); // Red for permanent use
+//           } else {
+//             btn.classList.add('btn-outline-warning'); // Orange for temporary use
+//           }
+//         } else if (btn === maintenanceBtn) {
+//           if (item.category === 'Consumable') {
+//             btn.classList.add('btn-outline-info'); // Blue for session take
+//           } else {
+//             btn.classList.add('btn-outline-info'); // Blue for maintenance
+//           }
+//         } else if (btn === restockBtn) {
+//           btn.classList.add('btn-outline-primary'); // Blue for adding stock
+//         }
+//       }
+//     }
+//   });
+  
+//   console.log('Transaction buttons updated:', {
+//     category: item.category,
+//     available: availableQuantity,
+//     inMaintenance: inMaintenanceCount,
+//     inSession: inSessionCount,
+//     rented: rentedCount,
+//     buttonStates: {
+//       restock: !restockBtn?.disabled,
+//       checkOut: !checkOutBtn?.disabled,
+//       maintenance: !maintenanceBtn?.disabled,
+//       checkIn: !checkInBtn?.disabled
+//     }
+//   });
+// }
 function updateTransactionButtonsForItem(item) {
   console.log('Updating transaction buttons for item:', item);
   
@@ -2770,7 +4473,7 @@ function updateTransactionButtonsForItem(item) {
   const maintenanceBtn = document.getElementById('maintenanceBtn');
   const restockBtn = document.getElementById('restockBtn');
   
-
+  // Reset all buttons
   [checkInBtn, checkOutBtn, maintenanceBtn, restockBtn].forEach(btn => {
     if (btn) {
       btn.disabled = true;
@@ -2797,114 +4500,124 @@ function updateTransactionButtonsForItem(item) {
   const itemsOut = inMaintenanceCount + inSessionCount + rentedCount;
   
   if (item.category === 'Consumable') {
-
+    // CONSUMABLE LOGIC - Clear labels
     
-
+    // Restock Button
     if (restockBtn) {
       restockBtn.disabled = false;
       restockBtn.innerHTML = '<i class="fas fa-plus"></i><span>Add Stock</span>';
-      restockBtn.dataset.action = 'Stock Addition';
+      restockBtn.dataset.action = 'Restock';
+      restockBtn.title = 'Add new stock to inventory';
     }
     
-
+    // Check Out Button - Permanent consumption
     if (checkOutBtn) {
       checkOutBtn.disabled = availableQuantity <= 0;
-      checkOutBtn.innerHTML = '<i class="fas fa-minus"></i><span>Use Items</span>';
-      checkOutBtn.dataset.action = 'Stock Consumption';
+      checkOutBtn.innerHTML = '<i class="fas fa-times-circle"></i><span>Use Up</span>';
+      checkOutBtn.dataset.action = 'Check-out';
+      checkOutBtn.title = 'Use items permanently (cannot be returned)';
     }
     
- 
+    // Maintenance Button - Take for session (returnable)
     if (maintenanceBtn) {
       maintenanceBtn.disabled = availableQuantity <= 0;
-      maintenanceBtn.innerHTML = '<i class="fas fa-chalkboard-teacher"></i><span>Session Use</span>';
+      maintenanceBtn.innerHTML = '<i class="fas fa-arrow-right"></i><span>Take for Session</span>';
       maintenanceBtn.dataset.action = 'Check Out for Session';
+      maintenanceBtn.title = 'Take items for session use (can be returned unused)';
     }
     
- 
+    // Check In Button - Return unused
     if (checkInBtn) {
       checkInBtn.disabled = inSessionCount <= 0;
-      checkInBtn.innerHTML = '<i class="fas fa-undo"></i><span>Return Unused</span>';
-      checkInBtn.dataset.action = 'Return from Session';
+      checkInBtn.innerHTML = '<i class="fas fa-arrow-left"></i><span>Return Unused</span>';
+      checkInBtn.dataset.action = 'Check-in';
+      checkInBtn.title = `Return ${inSessionCount} unused items from sessions`;
+      
+      if (inSessionCount > 0) {
+        checkInBtn.innerHTML = `<i class="fas fa-arrow-left"></i><span>Return Unused (${inSessionCount})</span>`;
+      }
     }
     
   } else {
- 
+    // EQUIPMENT LOGIC - Proper equipment workflow
     
- 
+    // Restock Button - Add new equipment
     if (restockBtn) {
       restockBtn.disabled = false;
-      restockBtn.innerHTML = '<i class="fas fa-plus"></i><span>Add Stock</span>';
-      restockBtn.dataset.action = 'Stock Addition';
+      restockBtn.innerHTML = '<i class="fas fa-plus"></i><span>Add Equipment</span>';
+      restockBtn.dataset.action = 'Restock';
+      restockBtn.title = 'Add new equipment to inventory';
     }
     
-  
+    // Check Out Button - Use in session (returnable)
     if (checkOutBtn) {
       checkOutBtn.disabled = availableQuantity <= 0;
-      checkOutBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i><span>Use in Session</span>';
+      checkOutBtn.innerHTML = '<i class="fas fa-play"></i><span>Use in Session</span>';
       checkOutBtn.dataset.action = 'Check Out for Session';
+      checkOutBtn.title = 'Take equipment for session use (will be returned)';
     }
     
-
+    // Maintenance Button - Send for repair
     if (maintenanceBtn) {
       maintenanceBtn.disabled = availableQuantity <= 0;
-      maintenanceBtn.innerHTML = '<i class="fas fa-tools"></i><span>Maintenance</span>';
+      maintenanceBtn.innerHTML = '<i class="fas fa-tools"></i><span>Send for Repair</span>';
       maintenanceBtn.dataset.action = 'Send to Maintenance';
+      maintenanceBtn.title = 'Send equipment for maintenance/repair';
     }
     
-
+    // Check In Button - Context-aware returns
     if (checkInBtn) {
       checkInBtn.disabled = itemsOut <= 0;
       
-
+      // Determine what type of return based on current state
       if (inMaintenanceCount > 0) {
-        checkInBtn.innerHTML = '<i class="fas fa-wrench"></i><span>Return from Maintenance</span>';
+        checkInBtn.innerHTML = '<i class="fas fa-wrench"></i><span>Return from Repair</span>';
         checkInBtn.dataset.action = 'Return from Maintenance';
+        checkInBtn.title = `Return ${inMaintenanceCount} items from maintenance`;
       } else if (inSessionCount > 0) {
-        checkInBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i><span>Return from Session</span>';
+        checkInBtn.innerHTML = '<i class="fas fa-undo"></i><span>Return from Session</span>';
         checkInBtn.dataset.action = 'Return from Session';
+        checkInBtn.title = `Return ${inSessionCount} items from sessions`;
       } else if (rentedCount > 0) {
         checkInBtn.innerHTML = '<i class="fas fa-handshake"></i><span>Return from Rental</span>';
         checkInBtn.dataset.action = 'Return from Rental';
+        checkInBtn.title = `Return ${rentedCount} items from rental`;
       } else {
         checkInBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i><span>Return Items</span>';
-        checkInBtn.dataset.action = 'Return';
+        checkInBtn.dataset.action = 'Check-in';
+        checkInBtn.title = 'Return items to inventory';
       }
     }
   }
   
-
+  // Apply proper styling
   [checkInBtn, checkOutBtn, maintenanceBtn, restockBtn].forEach(btn => {
     if (btn) {
-   
       if (btn.disabled) {
-        btn.setAttribute('title', 'Not available for this item');
         btn.classList.add('btn-outline-secondary');
-        btn.classList.remove('btn-outline-success', 'btn-outline-warning', 'btn-outline-info', 'btn-outline-primary');
+        btn.classList.remove('btn-outline-success', 'btn-outline-warning', 'btn-outline-info', 'btn-outline-primary', 'btn-outline-danger');
       } else {
-        btn.removeAttribute('title');
         btn.classList.remove('btn-outline-secondary');
         
-     
+        // Apply color coding
         if (btn === checkInBtn) {
-          btn.classList.add('btn-outline-success');
+          btn.classList.add('btn-outline-success'); // Green for returns
         } else if (btn === checkOutBtn) {
-          btn.classList.add('btn-outline-warning');
+          if (item.category === 'Consumable') {
+            btn.classList.add('btn-outline-danger'); // Red for permanent use
+          } else {
+            btn.classList.add('btn-outline-warning'); // Orange for session use
+          }
         } else if (btn === maintenanceBtn) {
-          btn.classList.add('btn-outline-info');
+          btn.classList.add('btn-outline-info'); // Blue for maintenance/session
         } else if (btn === restockBtn) {
-          btn.classList.add('btn-outline-primary');
+          btn.classList.add('btn-outline-primary'); // Blue for adding stock
         }
       }
     }
   });
   
-  console.log('Transaction buttons updated:', {
-    category: item.category,
-    available: availableQuantity,
-    inMaintenance: inMaintenanceCount,
-    inSession: inSessionCount,
-    rented: rentedCount
-  });
+  console.log('Transaction buttons updated for:', item.category);
 }
 
 
@@ -2912,53 +4625,56 @@ function populateTransactionTypes(item) {
   const transactionTypeSelect = document.getElementById('transactionType');
   if (!transactionTypeSelect) return;
   
-
+  // Clear existing options
   transactionTypeSelect.innerHTML = '<option value="">Select Transaction Type</option>';
   
   const category = item.category;
   const availableQuantity = item.availableQuantity !== undefined ? 
     item.availableQuantity : item.quantity;
   
-
   const options = [];
   
   if (category === 'Consumable') {
-  
     
-  
-    options.push({ value: 'Stock Addition', label: 'Add Stock' });
+    // Always allow adding stock
+    options.push({ value: 'Restock', label: 'Add Stock' });
     
- 
+    // Allow using items if there's stock available
     if (availableQuantity > 0) {
-      options.push({ value: 'Stock Consumption', label: 'Use/Consume Items' });
-      options.push({ value: 'Check Out for Session', label: 'Check Out for Session' });
+      options.push({ value: 'Check-out', label: 'Use/Consume Items' });
+      options.push({ value: 'Check Out for Session', label: 'Take for Session (Returnable)' });
     }
     
-  
+    // Allow stock removal if there's stock
+    if (availableQuantity > 0) {
+      options.push({ value: 'Stock Removal', label: 'Remove Stock (Disposal/Loss)' });
+    }
+    
+    // Allow stock adjustment for corrections
     options.push({ value: 'Stock Adjustment', label: 'Adjust Stock (Correction)' });
     
- 
+    // Check if any items are out in sessions and can be returned
     const inSessionCount = item.currentState?.inSession || 0;
     if (inSessionCount > 0) {
-      options.push({ value: 'Return from Session', label: 'Return Unused from Session' });
+      options.push({ value: 'Check-in', label: 'Return Unused from Session' });
     }
     
   } else {
-   
+    // EQUIPMENT OPTIONS - COMPLEX TRACKING
     
-
-    options.push({ value: 'Stock Addition', label: 'Add Stock (New Purchase)' });
+    // Always allow adding stock
+    options.push({ value: 'Restock', label: 'Add Stock (New Purchase)' });
     
-  
+    // Allow operations if there's available stock
     if (availableQuantity > 0) {
       options.push({ value: 'Stock Removal', label: 'Remove Stock (Disposal/Sale)' });
       options.push({ value: 'Relocate', label: 'Relocate Item' });
-      options.push({ value: 'Check Out for Session', label: 'Check Out for Session' });
+      options.push({ value: 'Check Out for Session', label: 'Use in Session' });
       options.push({ value: 'Rent Out', label: 'Rent Out' });
       options.push({ value: 'Send to Maintenance', label: 'Send to Maintenance' });
     }
     
-   
+    // Check if any items are out and can be returned
     const inMaintenanceCount = item.currentState?.inMaintenance || 0;
     const inSessionCount = item.currentState?.inSession || 0;
     const rentedCount = item.currentState?.rented || 0;
@@ -2976,7 +4692,7 @@ function populateTransactionTypes(item) {
     }
   }
   
-
+  // Add options to the select element
   options.forEach(option => {
     const optionElement = document.createElement('option');
     optionElement.value = option.value;
@@ -2984,20 +4700,25 @@ function populateTransactionTypes(item) {
     transactionTypeSelect.appendChild(optionElement);
   });
   
-
+  // Auto-select appropriate default based on item state
   if (options.length > 0) {
-
-    if (category === 'Consumable' && availableQuantity <= item.reorderLevel) {
-      transactionTypeSelect.value = 'Stock Addition';
-    } else if (availableQuantity > 0) {
-   
-      transactionTypeSelect.value = category === 'Consumable' ? 'Stock Consumption' : 'Check Out for Session';
+    if (category === 'Consumable') {
+      // For consumables, default based on stock level
+      if (availableQuantity <= item.reorderLevel) {
+        transactionTypeSelect.value = 'Restock';
+      } else {
+        transactionTypeSelect.value = 'Check-out';
+      }
     } else {
-  
-      transactionTypeSelect.value = options[0].value;
+      // For equipment, default to session use if available
+      if (availableQuantity > 0) {
+        transactionTypeSelect.value = 'Check Out for Session';
+      } else {
+        transactionTypeSelect.value = options[0].value;
+      }
     }
     
-
+    // Trigger change event to update form fields
     transactionTypeSelect.dispatchEvent(new Event('change'));
   }
 }
@@ -3082,10 +4803,14 @@ function setupQuickTransactionButtons() {
   }
 }
 
+
+
+
+
 function openQuickTransactionModal(item, actionType) {
   console.log(`Opening quick transaction modal for ${actionType}`);
   
-
+  // Get modal
   let quickModal = document.getElementById('quickTransactionModal');
   
   if (!quickModal) {
@@ -3094,7 +4819,7 @@ function openQuickTransactionModal(item, actionType) {
     return;
   }
   
- 
+  // Reset form
   const form = document.getElementById('quickTransactionForm');
   if (form) {
     form.reset();
@@ -3105,9 +4830,10 @@ function openQuickTransactionModal(item, actionType) {
     alertsContainer.innerHTML = '';
   }
   
-
+  // Determine transaction details based on action type and item category
   let title = '';
   let badge = '';
+  let transactionType = '';
   let showFromLocation = false;
   let showToLocation = false;
   let showSessionFields = false;
@@ -3116,119 +4842,218 @@ function openQuickTransactionModal(item, actionType) {
   let maxQuantity = 0;
   let defaultQuantity = 1;
   let quantityLabel = 'Quantity';
+  let helpText = '';
   
- 
-  switch (actionType) {
-    case 'Stock Addition':
-      title = 'Add Stock';
-      badge = 'bg-success';
-      showToLocation = true;
-      maxQuantity = 9999;
-      quantityLabel = 'Add Quantity';
-      break;
-      
-    case 'Stock Removal':
-      title = 'Remove Stock';
-      badge = 'bg-warning';
-      showFromLocation = true;
-      maxQuantity = item.availableQuantity || item.quantity;
-      quantityLabel = 'Remove Quantity';
-      break;
-      
-    case 'Check Out for Session':
-      title = 'Use in Session';
-      badge = 'bg-warning';
-      showSessionFields = true;
-      showToLocation = true;
-      maxQuantity = item.availableQuantity || item.quantity;
-      quantityLabel = 'Quantity for Session';
-      break;
-      
-    case 'Return from Session':
-      title = 'Return from Session';
-      badge = 'bg-info';
-      showSessionFields = true;
-      maxQuantity = item.currentState?.inSession || 0;
-      quantityLabel = 'Return Quantity';
-      break;
-      
-    case 'Rent Out':
-      title = 'Rent Out';
-      badge = 'bg-primary';
-      showRentalFields = true;
-      maxQuantity = item.availableQuantity || item.quantity;
-      quantityLabel = 'Quantity to Rent';
-      break;
-      
-    case 'Return from Rental':
-      title = 'Return from Rental';
-      badge = 'bg-primary';
-      showRentalFields = true;
-      maxQuantity = item.currentState?.rented || 0;
-      quantityLabel = 'Return Quantity';
-      break;
-      
-    case 'Send to Maintenance':
-      title = 'Send to Maintenance';
-      badge = 'bg-info';
-      showMaintenanceFields = true;
-      maxQuantity = item.availableQuantity || item.quantity;
-      quantityLabel = 'Quantity for Maintenance';
-      break;
-      
-    case 'Return from Maintenance':
-      title = 'Return from Maintenance';
-      badge = 'bg-info';
-      showMaintenanceFields = true;
-      maxQuantity = item.currentState?.inMaintenance || 0;
-      quantityLabel = 'Return Quantity';
-      break;
+  // Configure based on item category and action type
+  if (item.category === 'Consumable') {
+    // CONSUMABLE TRANSACTIONS
+    switch (actionType) {
+      case 'Restock':
+      case 'Stock Addition':
+        title = 'Add Stock';
+        badge = 'bg-success';
+        transactionType = 'Restock';
+        showToLocation = true; // Where are you putting the new stock?
+        maxQuantity = 9999;
+        quantityLabel = 'Add Quantity';
+        helpText = 'Adding new consumable items to inventory';
+        break;
+        
+      case 'Check-out':
+      case 'Stock Consumption':
+        title = 'Use Items (Permanent)';
+        badge = 'bg-danger';
+        transactionType = 'Check-out';
+        showToLocation = true; // Where are you using them?
+        maxQuantity = item.availableQuantity || item.quantity;
+        quantityLabel = 'Use Quantity';
+        helpText = 'Items will be consumed and cannot be returned';
+        break;
+        
+      case 'Check Out for Session':
+        title = 'Take for Session (Returnable)';
+        badge = 'bg-info';
+        transactionType = 'Check Out for Session';
+        showFromLocation = true; // Where are you taking them from?
+        showToLocation = true;   // Where are you taking them to?
+        showSessionFields = true; // Session details
+        maxQuantity = item.availableQuantity || item.quantity;
+        quantityLabel = 'Quantity for Session';
+        helpText = 'Items can be returned unused after the session';
+        break;
+        
+      case 'Check-in':
+      case 'Return from Session':
+        title = 'Return Unused Items';
+        badge = 'bg-success';
+        transactionType = 'Check-in';
+        showFromLocation = true; // Where are you returning them from?
+        showSessionFields = true; // Which session?
+        maxQuantity = item.currentState?.inSession || 0;
+        quantityLabel = 'Return Quantity';
+        helpText = 'Returning unused items back to inventory';
+        break;
+    }
+  } else {
+    // EQUIPMENT TRANSACTIONS
+    switch (actionType) {
+      case 'Restock':
+      case 'Stock Addition':
+        title = 'Add Equipment';
+        badge = 'bg-success';
+        transactionType = 'Restock';
+        showToLocation = true;
+        maxQuantity = 9999;
+        quantityLabel = 'Add Quantity';
+        helpText = 'Adding new equipment to inventory';
+        break;
+        
+      case 'Check Out for Session':
+        title = 'Use in Session';
+        badge = 'bg-warning';
+        transactionType = 'Check Out for Session';
+        showFromLocation = true; // Where are you taking them from?
+        showToLocation = true;   // Where are you taking them to?
+        showSessionFields = true;
+        maxQuantity = item.availableQuantity || item.quantity;
+        quantityLabel = 'Quantity for Session';
+        helpText = 'Equipment will be returned after the session';
+        break;
+        
+      case 'Return from Session':
+        title = 'Return from Session';
+        badge = 'bg-success';
+        transactionType = 'Return from Session';
+        showFromLocation = true; // Where are you returning them from?
+        showSessionFields = true;
+        maxQuantity = item.currentState?.inSession || 0;
+        quantityLabel = 'Return Quantity';
+        helpText = 'Returning equipment from session use';
+        break;
+        
+      case 'Send to Maintenance':
+      case 'Maintenance':
+        title = 'Send for Repair';
+        badge = 'bg-info';
+        transactionType = 'Send to Maintenance';
+        showFromLocation = true; // Where are you taking them from?
+        showMaintenanceFields = true;
+        maxQuantity = item.availableQuantity || item.quantity;
+        quantityLabel = 'Quantity for Repair';
+        helpText = 'Equipment will be returned after maintenance';
+        break;
+        
+      case 'Return from Maintenance':
+        title = 'Return from Repair';
+        badge = 'bg-success';
+        transactionType = 'Return from Maintenance';
+        showFromLocation = true; // Where are you returning them from?
+        showMaintenanceFields = true;
+        maxQuantity = item.currentState?.inMaintenance || 0;
+        quantityLabel = 'Return Quantity';
+        helpText = 'Returning equipment from maintenance';
+        break;
+        
+      case 'Rent Out':
+        title = 'Rent Out';
+        badge = 'bg-primary';
+        transactionType = 'Rent Out';
+        showFromLocation = true;
+        showRentalFields = true;
+        maxQuantity = item.availableQuantity || item.quantity;
+        quantityLabel = 'Quantity to Rent';
+        helpText = 'Equipment will be returned after rental period';
+        break;
+        
+      case 'Return from Rental':
+        title = 'Return from Rental';
+        badge = 'bg-success';
+        transactionType = 'Return from Rental';
+        showFromLocation = true;
+        showRentalFields = true;
+        maxQuantity = item.currentState?.rented || 0;
+        quantityLabel = 'Return Quantity';
+        helpText = 'Returning equipment from rental';
+        break;
+    }
   }
   
-
+  // Set modal title and help text
   const modalTitle = document.getElementById('quickTransactionTitle');
   if (modalTitle) {
     modalTitle.textContent = title;
   }
   
-
+  // Add help text to modal
+  const modalBody = document.querySelector('#quickTransactionModal .modal-body');
+  let helpTextEl = document.getElementById('transactionHelpText');
+  if (!helpTextEl && modalBody) {
+    helpTextEl = document.createElement('div');
+    helpTextEl.id = 'transactionHelpText';
+    helpTextEl.className = 'alert alert-info mb-3';
+    modalBody.insertBefore(helpTextEl, modalBody.firstChild);
+  }
+  if (helpTextEl) {
+    helpTextEl.innerHTML = `<i class="fas fa-info-circle me-2"></i>${helpText}`;
+  }
+  
+  // Set form values
   document.getElementById('quickTransactionItemId').value = item._id;
   document.getElementById('quickTransactionItem').value = item.name;
-  document.getElementById('quickTransactionType').value = actionType;
+  document.getElementById('quickTransactionType').value = transactionType;
   
-
+  // Set quantity default and max
   const quantityField = document.getElementById('quickTransactionQuantity');
   if (quantityField) {
     quantityField.value = Math.min(defaultQuantity, maxQuantity);
     quantityField.max = maxQuantity;
     
-  
-    const quantityLabel = document.querySelector('label[for="quickTransactionQuantity"]');
-    if (quantityLabel) {
-      quantityLabel.textContent = `${quantityLabel}*`;
+    // Update the label with max info
+    const quantityLabelEl = document.querySelector('label[for="quickTransactionQuantity"]');
+    if (quantityLabelEl) {
+      quantityLabelEl.textContent = `${quantityLabel}* (max: ${maxQuantity})`;
     }
   }
   
-
+  // Set badge
   const badgeEl = document.getElementById('quickTransactionTypeBadge');
   if (badgeEl) {
     badgeEl.textContent = title;
     badgeEl.className = `badge ${badge} mb-2`;
   }
   
-
+  // Show/hide fields based on transaction type
   const fromLocationGroup = document.getElementById('quickFromLocationGroup');
   const toLocationGroup = document.getElementById('quickToLocationGroup');
   const sessionFieldsGroup = document.getElementById('quickSessionGroup');
   const rentalFieldsGroup = document.getElementById('quickRentalGroup');
   const maintenanceFieldsGroup = document.getElementById('quickMaintenanceGroup');
   
+  // Update location labels based on context
   if (fromLocationGroup) {
     fromLocationGroup.style.display = showFromLocation ? 'block' : 'none';
+    const fromLabel = fromLocationGroup.querySelector('label');
+    if (fromLabel && showFromLocation) {
+      if (transactionType.includes('Return')) {
+        fromLabel.textContent = 'Returning From*';
+      } else {
+        fromLabel.textContent = 'Taking From*';
+      }
+    }
   }
   
   if (toLocationGroup) {
     toLocationGroup.style.display = showToLocation ? 'block' : 'none';
+    const toLabel = toLocationGroup.querySelector('label');
+    if (toLabel && showToLocation) {
+      if (transactionType === 'Restock') {
+        toLabel.textContent = 'Storing In*';
+      } else if (transactionType === 'Check-out') {
+        toLabel.textContent = 'Using In*';
+      } else {
+        toLabel.textContent = 'Taking To*';
+      }
+    }
   }
   
   if (sessionFieldsGroup) {
@@ -3243,19 +5068,20 @@ function openQuickTransactionModal(item, actionType) {
     maintenanceFieldsGroup.style.display = showMaintenanceFields ? 'block' : 'none';
   }
   
-
+  // Populate location dropdowns
   populateQuickTransactionLocations();
   
- 
+  // Open the modal
   try {
     const bsModal = new bootstrap.Modal(quickModal);
     bsModal.show();
     
-   
+    // Focus on quantity field
     setTimeout(() => {
       const quantityField = document.getElementById('quickTransactionQuantity');
-      if (quantityField) {
+      if (quantityField && maxQuantity > 0) {
         quantityField.focus();
+        quantityField.select();
       }
     }, 300);
   } catch (error) {
@@ -3263,6 +5089,188 @@ function openQuickTransactionModal(item, actionType) {
     showAlert('Error showing transaction modal. Please try again.', 'danger');
   }
 }
+
+// function openQuickTransactionModal(item, actionType) {
+//   console.log(`Opening quick transaction modal for ${actionType}`);
+  
+
+//   let quickModal = document.getElementById('quickTransactionModal');
+  
+//   if (!quickModal) {
+//     console.error('Quick transaction modal not found in the DOM!');
+//     showAlert('Quick transaction feature is not properly set up', 'danger');
+//     return;
+//   }
+  
+ 
+//   const form = document.getElementById('quickTransactionForm');
+//   if (form) {
+//     form.reset();
+//   }
+  
+//   const alertsContainer = document.getElementById('quickTransactionAlerts');
+//   if (alertsContainer) {
+//     alertsContainer.innerHTML = '';
+//   }
+  
+
+//   let title = '';
+//   let badge = '';
+//   let showFromLocation = false;
+//   let showToLocation = false;
+//   let showSessionFields = false;
+//   let showRentalFields = false;
+//   let showMaintenanceFields = false;
+//   let maxQuantity = 0;
+//   let defaultQuantity = 1;
+//   let quantityLabel = 'Quantity';
+  
+ 
+//   switch (actionType) {
+//     case 'Stock Addition':
+//       title = 'Add Stock';
+//       badge = 'bg-success';
+//       showToLocation = true;
+//       maxQuantity = 9999;
+//       quantityLabel = 'Add Quantity';
+//       break;
+      
+//     case 'Stock Removal':
+//       title = 'Remove Stock';
+//       badge = 'bg-warning';
+//       showFromLocation = true;
+//       maxQuantity = item.availableQuantity || item.quantity;
+//       quantityLabel = 'Remove Quantity';
+//       break;
+      
+//     case 'Check Out for Session':
+//       title = 'Use in Session';
+//       badge = 'bg-warning';
+//       showSessionFields = true;
+//       showToLocation = true;
+//       maxQuantity = item.availableQuantity || item.quantity;
+//       quantityLabel = 'Quantity for Session';
+//       break;
+      
+//     case 'Return from Session':
+//       title = 'Return from Session';
+//       badge = 'bg-info';
+//       showSessionFields = true;
+//       maxQuantity = item.currentState?.inSession || 0;
+//       quantityLabel = 'Return Quantity';
+//       break;
+      
+//     case 'Rent Out':
+//       title = 'Rent Out';
+//       badge = 'bg-primary';
+//       showRentalFields = true;
+//       maxQuantity = item.availableQuantity || item.quantity;
+//       quantityLabel = 'Quantity to Rent';
+//       break;
+      
+//     case 'Return from Rental':
+//       title = 'Return from Rental';
+//       badge = 'bg-primary';
+//       showRentalFields = true;
+//       maxQuantity = item.currentState?.rented || 0;
+//       quantityLabel = 'Return Quantity';
+//       break;
+      
+//     case 'Send to Maintenance':
+//       title = 'Send to Maintenance';
+//       badge = 'bg-info';
+//       showMaintenanceFields = true;
+//       maxQuantity = item.availableQuantity || item.quantity;
+//       quantityLabel = 'Quantity for Maintenance';
+//       break;
+      
+//     case 'Return from Maintenance':
+//       title = 'Return from Maintenance';
+//       badge = 'bg-info';
+//       showMaintenanceFields = true;
+//       maxQuantity = item.currentState?.inMaintenance || 0;
+//       quantityLabel = 'Return Quantity';
+//       break;
+//   }
+  
+
+//   const modalTitle = document.getElementById('quickTransactionTitle');
+//   if (modalTitle) {
+//     modalTitle.textContent = title;
+//   }
+  
+
+//   document.getElementById('quickTransactionItemId').value = item._id;
+//   document.getElementById('quickTransactionItem').value = item.name;
+//   document.getElementById('quickTransactionType').value = actionType;
+  
+
+//   const quantityField = document.getElementById('quickTransactionQuantity');
+//   if (quantityField) {
+//     quantityField.value = Math.min(defaultQuantity, maxQuantity);
+//     quantityField.max = maxQuantity;
+    
+  
+//     const quantityLabel = document.querySelector('label[for="quickTransactionQuantity"]');
+//     if (quantityLabel) {
+//       quantityLabel.textContent = `${quantityLabel}*`;
+//     }
+//   }
+  
+
+//   const badgeEl = document.getElementById('quickTransactionTypeBadge');
+//   if (badgeEl) {
+//     badgeEl.textContent = title;
+//     badgeEl.className = `badge ${badge} mb-2`;
+//   }
+  
+
+//   const fromLocationGroup = document.getElementById('quickFromLocationGroup');
+//   const toLocationGroup = document.getElementById('quickToLocationGroup');
+//   const sessionFieldsGroup = document.getElementById('quickSessionGroup');
+//   const rentalFieldsGroup = document.getElementById('quickRentalGroup');
+//   const maintenanceFieldsGroup = document.getElementById('quickMaintenanceGroup');
+  
+//   if (fromLocationGroup) {
+//     fromLocationGroup.style.display = showFromLocation ? 'block' : 'none';
+//   }
+  
+//   if (toLocationGroup) {
+//     toLocationGroup.style.display = showToLocation ? 'block' : 'none';
+//   }
+  
+//   if (sessionFieldsGroup) {
+//     sessionFieldsGroup.style.display = showSessionFields ? 'block' : 'none';
+//   }
+  
+//   if (rentalFieldsGroup) {
+//     rentalFieldsGroup.style.display = showRentalFields ? 'block' : 'none';
+//   }
+  
+//   if (maintenanceFieldsGroup) {
+//     maintenanceFieldsGroup.style.display = showMaintenanceFields ? 'block' : 'none';
+//   }
+  
+
+//   populateQuickTransactionLocations();
+  
+ 
+//   try {
+//     const bsModal = new bootstrap.Modal(quickModal);
+//     bsModal.show();
+    
+   
+//     setTimeout(() => {
+//       const quantityField = document.getElementById('quickTransactionQuantity');
+//       if (quantityField) {
+//         quantityField.focus();
+//       }
+//     }, 300);
+//   } catch (error) {
+//     console.error('Error showing modal:', error);
+//     showAlert('Error showing transaction modal. Please try again.', 'danger');
+//   }
+// }
 
 
 function saveQuickTransaction() {

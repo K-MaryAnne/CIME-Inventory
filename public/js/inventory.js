@@ -685,7 +685,7 @@ function setupBarcodeEventListeners() {
       }
     });
     
-    g
+  
     document.addEventListener('keydown', function(e) {
     
       if (document.querySelector('.modal.show')) {
@@ -1603,41 +1603,41 @@ function updateInventoryTable(items) {
   setupActionButtons();
 }
 
-function setupActionButtons() {
-  document.querySelectorAll('.view-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      loadItemDetails(btn.dataset.id);
-    });
-  });
+// function setupActionButtons() {
+//   document.querySelectorAll('.view-btn').forEach(btn => {
+//     btn.addEventListener('click', () => {
+//       loadItemDetails(btn.dataset.id);
+//     });
+//   });
   
-  document.querySelectorAll('.edit-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      loadItemDetails(btn.dataset.id, true);
-    });
-  });
+//   document.querySelectorAll('.edit-btn').forEach(btn => {
+//     btn.addEventListener('click', () => {
+//       loadItemDetails(btn.dataset.id, true);
+//     });
+//   });
   
-  document.querySelectorAll('.transaction-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const itemId = btn.dataset.id;
-      const itemName = btn.dataset.name;
+//   document.querySelectorAll('.transaction-btn').forEach(btn => {
+//     btn.addEventListener('click', (e) => {
+//       e.preventDefault();
+//       e.stopPropagation();
+//       const itemId = btn.dataset.id;
+//       const itemName = btn.dataset.name;
       
-      if (itemId && itemName) {
+//       if (itemId && itemName) {
        
-        fetchItemForTransaction(itemId); 
-      }
-    });
-  });
+//         fetchItemForTransaction(itemId); 
+//       }
+//     });
+//   });
   
-  document.querySelectorAll('.delete-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (confirm('Are you sure you want to delete this item? This action cannot be undone.')) {
-        deleteItem(btn.dataset.id);
-      }
-    });
-  });
-}
+//   document.querySelectorAll('.delete-btn').forEach(btn => {
+//     btn.addEventListener('click', () => {
+//       if (confirm('Are you sure you want to delete this item? This action cannot be undone.')) {
+//         deleteItem(btn.dataset.id);
+//       }
+//     });
+//   });
+// }
 
 
 function updatePagination() {
@@ -3888,6 +3888,80 @@ function openTransactionDialog(item) {
 }
 
 
+// function populateTransactionTypes(item) {
+//   const transactionTypeSelect = document.getElementById('transactionType');
+//   if (!transactionTypeSelect) return;
+  
+//   // Clear existing options
+//   transactionTypeSelect.innerHTML = '<option value="">Select Transaction Type</option>';
+  
+//   const category = item.category;
+//   const status = item.status;
+//   const availableQuantity = item.availableQuantity !== undefined ? 
+//     item.availableQuantity : item.quantity;
+  
+//   // Default transaction options
+//   const options = [];
+  
+
+//   if (category === 'Consumable') {
+//     // Consumable options
+//     options.push({ value: 'Stock Addition', label: 'Add Stock' });
+    
+//     // Only allow removal if there's stock available
+//     if (availableQuantity > 0) {
+//       options.push({ value: 'Stock Removal', label: 'Remove Stock' });
+//     }
+//   } else {
+//     // Non-consumable options (equipment)
+    
+//     // Always allow adding stock
+//     options.push({ value: 'Stock Addition', label: 'Add Stock' });
+    
+//     // Allow relocating if there's stock available
+//     if (availableQuantity > 0) {
+//       options.push({ value: 'Relocate', label: 'Relocate Item' });
+//       options.push({ value: 'Check Out for Session', label: 'Use in Session' });
+//       options.push({ value: 'Rent Out', label: 'Rent Out' });
+//       options.push({ value: 'Send to Maintenance', label: 'Send to Maintenance' });
+//     }
+    
+//     // Check if any items are out and can be returned
+//     const inMaintenanceCount = item.currentState?.inMaintenance || 0;
+//     const inSessionCount = item.currentState?.inSession || 0;
+//     const rentedCount = item.currentState?.rented || 0;
+    
+//     if (inMaintenanceCount > 0) {
+//       options.push({ value: 'Return from Maintenance', label: 'Return from Maintenance' });
+//     }
+    
+//     if (inSessionCount > 0) {
+//       options.push({ value: 'Return from Session', label: 'Return from Session' });
+//     }
+    
+//     if (rentedCount > 0) {
+//       options.push({ value: 'Return from Rental', label: 'Return from Rental' });
+//     }
+//   }
+  
+//   // Add options to the select element
+//   options.forEach(option => {
+//     const optionElement = document.createElement('option');
+//     optionElement.value = option.value;
+//     optionElement.textContent = option.label;
+//     transactionTypeSelect.appendChild(optionElement);
+//   });
+  
+//   // Select the first transaction type by default
+//   if (options.length > 0) {
+//     transactionTypeSelect.value = options[0].value;
+    
+//     // Trigger change event to update form fields
+//     transactionTypeSelect.dispatchEvent(new Event('change'));
+//   }
+// }
+
+
 function populateTransactionTypes(item) {
   const transactionTypeSelect = document.getElementById('transactionType');
   if (!transactionTypeSelect) return;
@@ -3903,30 +3977,44 @@ function populateTransactionTypes(item) {
   // Default transaction options
   const options = [];
   
-
   if (category === 'Consumable') {
-    // Consumable options
-    options.push({ value: 'Stock Addition', label: 'Add Stock' });
+    // CONSUMABLE TRANSACTION OPTIONS
     
-    // Only allow removal if there's stock available
+    // Stock management
+    options.push({ value: 'Restock', label: 'Add Stock' });
+    
+    // Only allow usage if there's stock available
     if (availableQuantity > 0) {
-      options.push({ value: 'Stock Removal', label: 'Remove Stock' });
+      options.push({ value: 'Check-out', label: 'Use/Consume Items' });
+      options.push({ value: 'Check Out for Session', label: 'Take for Session (Returnable)' });
+      options.push({ value: 'Stock Removal', label: 'Remove Stock (Disposal)' });
     }
+    
+    // Stock corrections
+    options.push({ value: 'Stock Adjustment', label: 'Adjust Stock (Correction)' });
+    
+    // Return options if items are out
+    const inSessionCount = item.currentState?.inSession || 0;
+    if (inSessionCount > 0) {
+      options.push({ value: 'Check-in', label: 'Return Unused from Session' });
+    }
+    
   } else {
-    // Non-consumable options (equipment)
+    // EQUIPMENT TRANSACTION OPTIONS
     
-    // Always allow adding stock
-    options.push({ value: 'Stock Addition', label: 'Add Stock' });
+    // Stock management
+    options.push({ value: 'Restock', label: 'Add Stock (New Purchase)' });
     
-    // Allow relocating if there's stock available
+    // Operations requiring available stock
     if (availableQuantity > 0) {
+      options.push({ value: 'Stock Removal', label: 'Remove Stock (Disposal/Sale)' });
       options.push({ value: 'Relocate', label: 'Relocate Item' });
       options.push({ value: 'Check Out for Session', label: 'Use in Session' });
       options.push({ value: 'Rent Out', label: 'Rent Out' });
       options.push({ value: 'Send to Maintenance', label: 'Send to Maintenance' });
     }
     
-    // Check if any items are out and can be returned
+    // Return options based on current state
     const inMaintenanceCount = item.currentState?.inMaintenance || 0;
     const inSessionCount = item.currentState?.inSession || 0;
     const rentedCount = item.currentState?.rented || 0;
@@ -3952,13 +4040,66 @@ function populateTransactionTypes(item) {
     transactionTypeSelect.appendChild(optionElement);
   });
   
-  // Select the first transaction type by default
+  // Select appropriate default transaction type
   if (options.length > 0) {
-    transactionTypeSelect.value = options[0].value;
+    if (category === 'Consumable') {
+      // For consumables, prioritize restocking if low stock
+      if (availableQuantity <= item.reorderLevel) {
+        transactionTypeSelect.value = 'Restock';
+      } else if (availableQuantity > 0) {
+        transactionTypeSelect.value = 'Check-out';
+      } else {
+        transactionTypeSelect.value = options[0].value;
+      }
+    } else {
+      // For equipment, prioritize session use if available
+      if (availableQuantity > 0) {
+        transactionTypeSelect.value = 'Check Out for Session';
+      } else {
+        transactionTypeSelect.value = options[0].value;
+      }
+    }
     
     // Trigger change event to update form fields
     transactionTypeSelect.dispatchEvent(new Event('change'));
   }
+}
+
+
+function setupActionButtons() {
+  document.querySelectorAll('.view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      loadItemDetails(btn.dataset.id);
+    });
+  });
+  
+  document.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      loadItemDetails(btn.dataset.id, true);
+    });
+  });
+  
+  document.querySelectorAll('.transaction-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const itemId = btn.dataset.id;
+      const itemName = btn.dataset.name;
+      
+      if (itemId && itemName) {
+        // Navigate to scanner page for transactions
+        window.location.href = `scanner.html?id=${itemId}`;
+      }
+    });
+  });
+  
+  document.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (confirm('Are you sure you want to delete this item? This action cannot be undone.')) {
+        deleteItem(btn.dataset.id);
+      }
+    });
+  });
 }
 
 
