@@ -263,7 +263,8 @@ const deleteItem = async (req, res) => {
     const item = await Item.findById(req.params.id);
     
     if (item) {
-      await item.remove();
+      // Use deleteOne() instead of remove()
+      await item.deleteOne();
       
       // Also remove related transactions
       await Transaction.deleteMany({ item: req.params.id });

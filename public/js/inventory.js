@@ -1690,31 +1690,7 @@ function updateInventoryTable(items) {
 
 
 
-      const thumbnailHtml = item.image 
-      ? `<img src="${API_URL}/items/${item._id}/image?thumbnail=true" class="item-thumbnail me-2" alt="${item.name}">`
-      : `<div class="item-thumbnail me-2 d-flex align-items-center justify-content-center bg-light">
-           <i class="fas fa-box text-muted" style="font-size: 0.8rem"></i>
-         </div>`;
     
-    html += `
-      <tr data-id="${item._id}">
-        <td>
-          <div class="form-check">
-            <input class="form-check-input item-checkbox" type="checkbox" value="${item._id}">
-          </div>
-        </td>
-        <td>
-          <div class="d-flex align-items-center">
-            ${thumbnailHtml}
-            <div>
-              <h6 class="mb-0">${item.name}</h6>
-              <small class="text-muted">${item.akuNo || 'No S/N'}</small>
-            </div>
-          </div>
-        </td>
-        <!-- Rest of your row -->
-      </tr>
-    `;
     
   });
   
@@ -4445,4 +4421,3 @@ document.addEventListener('DOMContentLoaded', () => {
   testAuthConnection();
 
 });
-

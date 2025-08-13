@@ -732,17 +732,7 @@ const rentedCount = item.currentState?.rented || 0;
     
     // Create HTML for item details with improved structure
     
-    const imageHtml = `
-    <div class="text-center mb-3">
-      ${item.image 
-        ? `<img src="${API_URL}/items/${item._id}/image" class="img-fluid rounded item-image" alt="${item.name}">`
-        : `<div class="image-placeholder">
-             <i class="fas fa-box"></i>
-             <p>No image available</p>
-           </div>`
-      }
-    </div>
-  `;
+   
     
     
     const detailsHtml = `
