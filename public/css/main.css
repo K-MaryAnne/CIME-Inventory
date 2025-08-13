@@ -323,7 +323,7 @@
     color: var(--primary-color);
   }
   
-  /* Change the tooltip arrow color */
+  
   .top-items-tooltip-container .tooltip-arrow::before {
     border-bottom-color: #fff;
   }

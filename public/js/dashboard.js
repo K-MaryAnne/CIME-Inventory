@@ -1,7 +1,6 @@
 // public/js/dashboard.js
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Check if user is logged in
     const token = getAuthToken();
     const user = getCurrentUser();
     
@@ -10,18 +9,17 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
-    // Initialize the dashboard
     initializeDashboard();
     
-    // Setup event listeners
+    
     setupEventListeners();
     
-    // Show/hide admin links based on user role
+    
     if (isAdmin()) {
       document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('d-none'));
     }
     
-    // Update user info
+    
     document.getElementById('userName').textContent = user.name;
     document.getElementById('profileName').value = user.name;
     document.getElementById('profileEmail').value = user.email;
@@ -29,25 +27,23 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.addEventListener('DOMContentLoaded', () => {
-    // Existing code...
     
     // Refresh tooltips when dashboard is refreshed
     document.getElementById('refreshDashboard').addEventListener('click', () => {
-      // Remove any existing tooltips
+
       const oldTooltip = bootstrap.Tooltip.getInstance(document.querySelector('.top-items-info-trigger'));
       if (oldTooltip) {
         oldTooltip.dispose();
       }
       
-      // Then refresh dashboard
       initializeDashboard();
     });
   });
   
-  // Initialize dashboard data
+ 
   async function initializeDashboard() {
     try {
-      // Fetch dashboard data
+      
       const response = await fetchWithAuth(`${API_URL}/reports/dashboard`);
       
       if (!response) return;
@@ -71,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('totalItems').textContent = data.totalItems || 0;
     document.getElementById('lowStockItems').textContent = data.lowStockItems || 0;
     document.getElementById('maintenanceItems').textContent = data.itemsUnderMaintenance || 0;
-    // document.getElementById('inventoryValue').textContent = formatCurrency(data.inventoryValue || 0);
+    
     
     const mostUsedItem = data.mostUsedItems && data.mostUsedItems.length > 0 ? 
         `${data.mostUsedItems[0].name} (${data.mostUsedItems[0].totalQuantity} uses)` : 
@@ -83,7 +79,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const topItem = data.mostUsedItems[0];
         document.getElementById('mostUsedItem').textContent = `${topItem.name} (${topItem.totalQuantity})`;
         
-        // Create tooltip content for top 3 items
         let tooltipContent = '<div class="top-items-tooltip">';
         for (let i = 0; i < Math.min(3, data.mostUsedItems.length); i++) {
           const item = data.mostUsedItems[i];
@@ -99,11 +94,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         tooltipContent += '</div>';
         
-        // Update the tooltip
+       
         const tooltipTrigger = document.querySelector('.top-items-info-trigger');
         tooltipTrigger.setAttribute('data-bs-original-title', tooltipContent);
         
-        // Initialize Bootstrap tooltip
+      
         const tooltip = new bootstrap.Tooltip(tooltipTrigger, {
           html: true,
           placement: 'bottom',
@@ -122,12 +117,12 @@ document.addEventListener('DOMContentLoaded', () => {
       // Update tables
   updateRecentTransactionsTable(data.recentTransactions || []);
   
-  // Fetch low stock items only if user has permission (Admin or Inventory Manager)
+
   const user = getCurrentUser();
   if (user && (user.role === 'Admin' || user.role === 'Inventory Manager')) {
     fetchLowStockItems();
   } else {
-    // For Staff and Technician roles, show a permissions message instead
+
     const lowStockTable = document.getElementById('lowStockTable');
     if (lowStockTable) {
       lowStockTable.innerHTML = `
@@ -194,15 +189,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  // Create status chart
+
   function createStatusChart(itemsByStatus) {
     const ctx = document.getElementById('statusChart').getContext('2d');
     
-    // Prepare data
+  
     const labels = itemsByStatus.map(item => item._id);
     const counts = itemsByStatus.map(item => item.count);
     
-    // Colors for different statuses
+  
     const backgroundColors = {
       'Available': 'rgba(40, 167, 69, 0.7)',
       'Under Maintenance': 'rgba(255, 193, 7, 0.7)',
@@ -210,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
       'Rented': 'rgba(23, 162, 184, 0.7)'
     };
     
-    // Create chart
+    
     new Chart(ctx, {
       type: 'bar',
       data: {
@@ -251,7 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  // Update recent transactions table
+
   function updateRecentTransactionsTable(transactions) {
     const tableBody = document.getElementById('recentTransactions');
     
@@ -285,7 +280,6 @@ document.addEventListener('DOMContentLoaded', () => {
     tableBody.innerHTML = html;
   }
   
-  // Fetch low stock items
   async function fetchLowStockItems() {
     try {
       const response = await fetchWithAuth(`${API_URL}/items/low-stock`);

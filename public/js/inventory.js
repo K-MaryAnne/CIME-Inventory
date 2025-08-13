@@ -7,15 +7,327 @@ let totalPages = 1;
 let currentFilter = {};
 let locationHierarchy = [];
 let suppliers = [];
-// Add these global scanner variables
+
 let activeScanner = null;
 let activeScannerElementId = null;
 let activeScannerTargetId = null;
 let transactionItemData = null;
 let generatedBarcode = null;
 
-// let itemImageChanged = false;
-// let currentItemHasImage = false;
+
+// updateTransactionFormFields function 
+
+function updateTransactionFormFields(transactionType) {
+  // Get all form groups
+  const fromLocationGroup = document.getElementById('fromLocationGroup') || 
+                           document.getElementById('quickFromLocationGroup') ||
+                           document.getElementById('enhancedFromLocationGroup');
+  const toLocationGroup = document.getElementById('toLocationGroup') || 
+                         document.getElementById('quickToLocationGroup') ||
+                         document.getElementById('enhancedToLocationGroup');
+  const sessionGroup = document.getElementById('sessionDetailsGroup') || 
+                      document.getElementById('quickSessionGroup') ||
+                      document.getElementById('enhancedSessionDetailsGroup');
+  const rentalGroup = document.getElementById('rentalDetailsGroup') || 
+                     document.getElementById('quickRentalGroup') ||
+                     document.getElementById('enhancedRentalDetailsGroup');
+  const maintenanceGroup = document.getElementById('maintenanceDetailsGroup') || 
+                          document.getElementById('quickMaintenanceGroup') ||
+                          document.getElementById('enhancedMaintenanceDetailsGroup');
+  
+  // Hide all groups initially
+  [fromLocationGroup, toLocationGroup, sessionGroup, rentalGroup, maintenanceGroup].forEach(group => {
+    if (group) group.style.display = 'none';
+  });
+  
+  // Show relevant groups based on transaction type
+  switch (transactionType) {
+    // STOCK MANAGEMENT
+    case 'Stock Addition':
+    case 'Add Stock':
+      // Show destination location for new stock
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      break;
+      
+    case 'Stock Consumption':
+    case 'Use Items':
+      // No special fields needed for consumption
+      break;
+      
+    case 'Stock Removal':
+    case 'Remove Stock':
+      // Show source location for removal/disposal
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      break;
+      
+    case 'Stock Adjustment':
+      // No location needed for adjustments (corrections)
+      break;
+      
+    // LOCATION MANAGEMENT
+    case 'Relocate':
+      // Show both from and to locations
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      break;
+      
+    // SESSION MANAGEMENT
+    case 'Check Out for Session':
+      // Show session details and optionally destination
+      if (sessionGroup) sessionGroup.style.display = 'block';
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      break;
+      
+    case 'Return from Session':
+      // Show session details for identification
+      if (sessionGroup) sessionGroup.style.display = 'block';
+      break;
+      
+    // RENTAL MANAGEMENT
+    case 'Rent Out':
+      // Show rental details
+      if (rentalGroup) rentalGroup.style.display = 'block';
+      break;
+      
+    case 'Return from Rental':
+      // Show rental details for identification
+      if (rentalGroup) rentalGroup.style.display = 'block';
+      break;
+      
+    // MAINTENANCE MANAGEMENT
+    case 'Send to Maintenance':
+      // Show maintenance details
+      if (maintenanceGroup) maintenanceGroup.style.display = 'block';
+      break;
+      
+    case 'Return from Maintenance':
+      // Show maintenance details for identification
+      if (maintenanceGroup) maintenanceGroup.style.display = 'block';
+      break;
+      
+    // LEGACY TRANSACTION TYPES (for backward compatibility)
+    case 'Check-in':
+      // Generic check-in - show from location
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      break;
+      
+    case 'Check-out':
+      // Generic check-out - show to location
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      break;
+      
+    case 'Maintenance':
+      // Legacy maintenance - show maintenance fields
+      if (maintenanceGroup) maintenanceGroup.style.display = 'block';
+      break;
+      
+    case 'Restock':
+      // Legacy restock - show both locations
+      if (fromLocationGroup) fromLocationGroup.style.display = 'block';
+      if (toLocationGroup) toLocationGroup.style.display = 'block';
+      break;
+      
+    default:
+      console.warn(`Unknown transaction type: ${transactionType}`);
+      break;
+  }
+  
+  // Update quantity limits based on transaction type
+  updateQuantityLimitsForTransaction(transactionType);
+}
+
+
+function updateQuantityLimitsForTransaction(transactionType) {
+  // Try to find quantity input from different possible forms
+  const quantityInput = document.getElementById('transactionQuantity') ||
+                       document.getElementById('quickTransactionQuantity') ||
+                       document.getElementById('enhancedTransactionQuantity');
+  
+  if (!quantityInput) {
+    console.warn('Quantity input field not found');
+    return;
+  }
+  
+  // Get current item data
+  const itemId = document.getElementById('transactionItemId')?.value ||
+                document.getElementById('quickTransactionItemId')?.value ||
+                document.getElementById('enhancedTransactionItemId')?.value ||
+                currentItemId;
+  
+  if (!itemId) {
+    console.warn('No item ID found for quantity limit calculation');
+    return;
+  }
+  
+  // If we have cached item data, use it; otherwise fetch it
+  if (transactionItemData && transactionItemData._id === itemId) {
+    setQuantityLimits(transactionItemData, transactionType, quantityInput);
+  } else {
+    // Fetch current item data
+    fetchWithAuth(`${API_URL}/items/${itemId}`)
+      .then(response => {
+        if (!response.ok) throw new Error('Failed to fetch item');
+        return response.json();
+      })
+      .then(item => {
+        setQuantityLimits(item, transactionType, quantityInput);
+      })
+      .catch(error => {
+        console.error('Error fetching item for quantity limits:', error);
+        // Set a safe default
+        quantityInput.max = 1;
+        quantityInput.value = Math.min(parseInt(quantityInput.value) || 1, 1);
+      });
+  }
+}
+
+function setQuantityLimits(item, transactionType, quantityInput) {
+  let maxQuantity = 1;
+  let defaultQuantity = 1;
+  
+  // Calculate limits based on transaction type and item state
+  switch (transactionType) {
+    case 'Stock Addition':
+    case 'Add Stock':
+    case 'Stock Adjustment':
+      // No real limit for adding stock
+      maxQuantity = 9999;
+      defaultQuantity = item.category === 'Consumable' ? 10 : 1;
+      break;
+      
+    case 'Stock Consumption':
+    case 'Use Items':
+    case 'Stock Removal':
+    case 'Remove Stock':
+    case 'Relocate':
+    case 'Check Out for Session':
+    case 'Rent Out':
+    case 'Send to Maintenance':
+      // Limited by available quantity
+      maxQuantity = item.availableQuantity || 0;
+      defaultQuantity = Math.min(1, maxQuantity);
+      break;
+      
+    case 'Return from Session':
+      // Limited by items currently in session
+      maxQuantity = item.currentState?.inSession || 0;
+      defaultQuantity = Math.min(1, maxQuantity);
+      break;
+      
+    case 'Return from Rental':
+      // Limited by items currently rented
+      maxQuantity = item.currentState?.rented || 0;
+      defaultQuantity = Math.min(1, maxQuantity);
+      break;
+      
+    case 'Return from Maintenance':
+      // Limited by items currently in maintenance
+      maxQuantity = item.currentState?.inMaintenance || 0;
+      defaultQuantity = Math.min(1, maxQuantity);
+      break;
+      
+    // Legacy transaction types
+    case 'Check-in':
+    case 'Restock':
+      maxQuantity = 9999;
+      defaultQuantity = 1;
+      break;
+      
+    case 'Check-out':
+    case 'Maintenance':
+      maxQuantity = item.availableQuantity || 0;
+      defaultQuantity = Math.min(1, maxQuantity);
+      break;
+      
+    default:
+      maxQuantity = item.availableQuantity || 1;
+      defaultQuantity = Math.min(1, maxQuantity);
+      break;
+  }
+  
+  // Update the input field
+  quantityInput.max = maxQuantity;
+  
+  // Set value to default if current value exceeds max or is empty
+  const currentValue = parseInt(quantityInput.value) || 0;
+  if (currentValue > maxQuantity || currentValue <= 0) {
+    quantityInput.value = Math.max(1, Math.min(defaultQuantity, maxQuantity));
+  }
+  
+  
+  const quantityLabel = document.querySelector(`label[for="${quantityInput.id}"]`);
+  if (quantityLabel && maxQuantity > 0) {
+    const originalText = quantityLabel.textContent.replace(/ \(max: \d+\)/, '');
+    quantityLabel.textContent = `${originalText} (max: ${maxQuantity})`;
+  }
+  
+  // Disable input if no items available for outbound transactions
+  const isOutboundTransaction = [
+    'Stock Consumption', 'Use Items', 'Stock Removal', 'Remove Stock',
+    'Check Out for Session', 'Rent Out', 'Send to Maintenance',
+    'Return from Session', 'Return from Rental', 'Return from Maintenance'
+  ].includes(transactionType);
+  
+  if (isOutboundTransaction && maxQuantity <= 0) {
+    quantityInput.disabled = true;
+    quantityInput.value = 0;
+    
+    // Show warning message
+    const warningElement = document.getElementById('quantityWarning') || createQuantityWarning();
+    warningElement.textContent = getQuantityWarningMessage(transactionType, item);
+    warningElement.style.display = 'block';
+  } else {
+    quantityInput.disabled = false;
+    const warningElement = document.getElementById('quantityWarning');
+    if (warningElement) {
+      warningElement.style.display = 'none';
+    }
+  }
+}
+
+function createQuantityWarning() {
+  const warning = document.createElement('div');
+  warning.id = 'quantityWarning';
+  warning.className = 'alert alert-warning mt-2';
+  warning.style.display = 'none';
+  
+  // Find the quantity input and insert warning after it
+  const quantityInput = document.getElementById('transactionQuantity') ||
+                       document.getElementById('quickTransactionQuantity') ||
+                       document.getElementById('enhancedTransactionQuantity');
+  
+  if (quantityInput && quantityInput.parentNode) {
+    quantityInput.parentNode.insertBefore(warning, quantityInput.nextSibling);
+  }
+  
+  return warning;
+}
+
+function getQuantityWarningMessage(transactionType, item) {
+  switch (transactionType) {
+    case 'Stock Consumption':
+    case 'Use Items':
+      return `No ${item.name} available to consume.`;
+    case 'Check Out for Session':
+      return `No ${item.name} available for session use.`;
+    case 'Return from Session':
+      return `No ${item.name} currently in session to return.`;
+    case 'Return from Rental':
+      return `No ${item.name} currently rented to return.`;
+    case 'Return from Maintenance':
+      return `No ${item.name} currently in maintenance to return.`;
+    case 'Send to Maintenance':
+      return `No ${item.name} available to send to maintenance.`;
+    case 'Rent Out':
+      return `No ${item.name} available to rent out.`;
+    default:
+      return `No ${item.name} available for this transaction.`;
+  }
+}
+
+
+
+
 
 
 // Handle view button clicks
@@ -47,7 +359,7 @@ document.addEventListener('click', function(e) {
 
 
 
-// Add CSS fix for modal z-index issues
+
 const modalFixStyle = document.createElement('style');
 modalFixStyle.textContent = `
   .modal-backdrop {
@@ -81,7 +393,7 @@ async function checkServerConnection() {
     }
   }
   
-  // Add this line to the end of your DOMContentLoaded event listener in inventory.js
+
   checkServerConnection();
 
 // Initialize inventory data
@@ -212,410 +524,6 @@ async function loadLowStockItems() {
 
 
 
-function setupImageHandling() {
-  console.log('Setting up image handling');
-  
-  // Preview image when a file is selected
-  const imageFileInput = document.getElementById('itemImageFile');
-  if (imageFileInput) {
-    imageFileInput.addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (file) {
-        previewImage(file);
-        imageUploadChanged = true;
-      }
-    });
-  }
-  
-  // Upload image button
-  const uploadBtn = document.getElementById('uploadImageBtn');
-  if (uploadBtn) {
-    uploadBtn.addEventListener('click', function() {
-      const fileInput = document.getElementById('itemImageFile');
-      if (fileInput.files.length > 0) {
-        uploadItemImage(fileInput.files[0]);
-      } else {
-        showAlert('Please select an image file first', 'warning', 'itemModalAlerts');
-      }
-    });
-  }
-  
-  // Remove image button
-  const removeBtn = document.getElementById('removeImageBtn');
-  if (removeBtn) {
-    removeBtn.addEventListener('click', function() {
-      if (confirm('Are you sure you want to remove the current image?')) {
-        removeItemImage();
-      }
-    });
-  }
-}
-
-// Preview an image file
-function previewImage(file) {
-  const reader = new FileReader();
-  
-  reader.onload = function(e) {
-    const previewContainer = document.getElementById('itemImagePreview');
-    previewContainer.innerHTML = `
-      <div class="image-preview">
-        <img src="${e.target.result}" alt="Preview">
-      </div>
-    `;
-  };
-  
-  reader.onerror = function() {
-    showAlert('Error reading image file', 'danger', 'itemModalAlerts');
-  };
-  
-  reader.readAsDataURL(file);
-}
-
-// Upload image to server
-async function uploadItemImage(file) {
-  const itemId = document.getElementById('itemId').value;
-  if (!itemId) {
-    showAlert('Please save the item first before uploading an image', 'warning', 'itemModalAlerts');
-    return;
-  }
-  
-  // Validate file
-  if (!file.type.startsWith('image/')) {
-    showAlert('Please select a valid image file', 'danger', 'itemModalAlerts');
-    return;
-  }
-  
-  if (file.size > 5 * 1024 * 1024) { // 5MB
-    showAlert('Image file is too large. Maximum size is 5MB', 'danger', 'itemModalAlerts');
-    return;
-  }
-  
-  // Create form data
-  const formData = new FormData();
-  formData.append('image', file);
-  
-  // Show loading
-  const uploadBtn = document.getElementById('uploadImageBtn');
-  const originalBtnText = uploadBtn.innerHTML;
-  uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Uploading...';
-  uploadBtn.disabled = true;
-  
-  // Show status
-  const statusDiv = document.getElementById('imageUploadStatus');
-  statusDiv.innerHTML = '<div class="text-info">Uploading image...</div>';
-  
-  try {
-    const response = await fetchWithAuth(`${API_URL}/items/${itemId}/image`, {
-      method: 'POST',
-      body: formData
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to upload image');
-    }
-    
-    const data = await response.json();
-    
-    // Update UI
-    showAlert('Image uploaded successfully', 'success', 'itemModalAlerts');
-    statusDiv.innerHTML = '<div class="text-success">Upload successful!</div>';
-    
-    // Reset file input but keep preview
-    document.getElementById('itemImageFile').value = '';
-    
-    // Set flag that we have an image
-    currentItemImageExists = true;
-    imageUploadChanged = false;
-    
-    // Hide status after 3 seconds
-    setTimeout(() => {
-      statusDiv.innerHTML = '';
-    }, 3000);
-    
-  } catch (error) {
-    console.error('Upload error:', error);
-    showAlert('Failed to upload image: ' + error.message, 'danger', 'itemModalAlerts');
-    statusDiv.innerHTML = '<div class="text-danger">Upload failed!</div>';
-  } finally {
-    // Reset button
-    uploadBtn.innerHTML = originalBtnText;
-    uploadBtn.disabled = false;
-  }
-}
-
-// Load an item's image
-// Replace your existing loadItemImage function with this:
-function loadItemImage(itemId) {
-  if (!itemId) return;
-  
-  const imgContainer = document.getElementById('itemImagePreview');
-  
-  // Set loading placeholder
-  imgContainer.innerHTML = `
-    <div class="image-placeholder">
-      <span class="spinner-border spinner-border-sm"></span>
-      <p>Loading image...</p>
-    </div>
-  `;
-  
-  // Use fetchWithAuth to properly handle authentication
-  fetchWithAuth(`${API_URL}/items/${itemId}/image`)
-    .then(response => {
-      if (response && response.ok) {
-        // Image exists, create image URL with auth token
-        const token = getAuthToken();
-        const imageUrl = `${API_URL}/items/${itemId}/image?token=${token}&t=${Date.now()}`;
-        
-        imgContainer.innerHTML = `
-          <div class="image-preview">
-            <img src="${imageUrl}" alt="Item image" onload="this.style.opacity=1" style="opacity:0; transition: opacity 0.3s;">
-          </div>
-        `;
-        currentItemImageExists = true;
-      } else {
-        // No image or error
-        imgContainer.innerHTML = `
-          <div class="image-placeholder">
-            <i class="fas fa-image"></i>
-            <p>No image available</p>
-          </div>
-        `;
-        currentItemImageExists = false;
-      }
-    })
-    .catch(error => {
-      console.error('Error loading image:', error);
-      imgContainer.innerHTML = `
-        <div class="image-placeholder">
-          <i class="fas fa-exclamation-circle"></i>
-          <p>Error loading image</p>
-        </div>
-      `;
-      currentItemImageExists = false;
-    });
-}
-
-// Remove an item's image
-// Image handling functions - FIXED VERSION
-
-// Global variables for image handling
-let imageUploadChanged = false;  // Changed name to avoid conflicts
-let currentItemImageExists = false;  // Changed name to avoid conflicts
-
-// Initialize image handling
-function setupImageHandling() {
-  console.log('Setting up image handling');
-  
-  // Preview image when a file is selected
-  const imageFileInput = document.getElementById('itemImageFile');
-  if (imageFileInput) {
-    imageFileInput.addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (file) {
-        previewImage(file);
-        imageUploadChanged = true;
-      }
-    });
-  }
-  
-  // Upload image button
-  const uploadBtn = document.getElementById('uploadImageBtn');
-  if (uploadBtn) {
-    uploadBtn.addEventListener('click', function() {
-      const fileInput = document.getElementById('itemImageFile');
-      if (fileInput.files.length > 0) {
-        uploadItemImage(fileInput.files[0]);
-      } else {
-        showAlert('Please select an image file first', 'warning', 'itemModalAlerts');
-      }
-    });
-  }
-  
-  // Remove image button
-  const removeBtn = document.getElementById('removeImageBtn');
-  if (removeBtn) {
-    removeBtn.addEventListener('click', function() {
-      if (confirm('Are you sure you want to remove the current image?')) {
-        removeItemImage();
-      }
-    });
-  }
-}
-
-// Preview an image file
-function previewImage(file) {
-  const reader = new FileReader();
-  
-  reader.onload = function(e) {
-    const previewContainer = document.getElementById('itemImagePreview');
-    previewContainer.innerHTML = `
-      <div class="image-preview">
-        <img src="${e.target.result}" alt="Preview">
-      </div>
-    `;
-  };
-  
-  reader.onerror = function() {
-    showAlert('Error reading image file', 'danger', 'itemModalAlerts');
-  };
-  
-  reader.readAsDataURL(file);
-}
-
-// Upload image to server (SIMPLIFIED VERSION FOR TESTING)
-async function uploadItemImage(file) {
-  const itemId = document.getElementById('itemId').value;
-  if (!itemId) {
-    showAlert('Please save the item first before uploading an image', 'warning', 'itemModalAlerts');
-    return;
-  }
-  
-  // Validate file
-  if (!file.type.startsWith('image/')) {
-    showAlert('Please select a valid image file', 'danger', 'itemModalAlerts');
-    return;
-  }
-  
-  if (file.size > 5 * 1024 * 1024) { // 5MB
-    showAlert('Image file is too large. Maximum size is 5MB', 'danger', 'itemModalAlerts');
-    return;
-  }
-  
-  // Create form data
-  const formData = new FormData();
-  formData.append('image', file);
-  
-  // Show loading
-  const uploadBtn = document.getElementById('uploadImageBtn');
-  const originalBtnText = uploadBtn.innerHTML;
-  uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Uploading...';
-  uploadBtn.disabled = true;
-  
-  // Show status
-  const statusDiv = document.getElementById('imageUploadStatus');
-  statusDiv.innerHTML = '<div class="text-info">Uploading image...</div>';
-  
-  try {
-    const response = await fetchWithAuth(`${API_URL}/items/${itemId}/image`, {
-      method: 'POST',
-      body: formData
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to upload image');
-    }
-    
-    const data = await response.json();
-    
-    // Update UI
-    showAlert('Image uploaded successfully', 'success', 'itemModalAlerts');
-    statusDiv.innerHTML = '<div class="text-success">Upload successful!</div>';
-    
-    // Reset file input but keep preview
-    document.getElementById('itemImageFile').value = '';
-    
-    // Set flag that we have an image
-    currentItemImageExists = true;
-    imageUploadChanged = false;
-    
-    // Hide status after 3 seconds
-    setTimeout(() => {
-      statusDiv.innerHTML = '';
-    }, 3000);
-    
-  } catch (error) {
-    console.error('Upload error:', error);
-    showAlert('Failed to upload image: ' + error.message, 'danger', 'itemModalAlerts');
-    statusDiv.innerHTML = '<div class="text-danger">Upload failed!</div>';
-  } finally {
-    // Reset button
-    uploadBtn.innerHTML = originalBtnText;
-    uploadBtn.disabled = false;
-  }
-}
-
-// Load an item's image (SIMPLIFIED VERSION)
-function loadItemImage(itemId) {
-  if (!itemId) return;
-  
-  const imgContainer = document.getElementById('itemImagePreview');
-  
-  // Try to load the image
-  const img = new Image();
-  img.onload = function() {
-    imgContainer.innerHTML = `
-      <div class="image-preview">
-        <img src="${API_URL}/items/${itemId}/image" alt="Item image">
-      </div>
-    `;
-    currentItemImageExists = true;
-  };
-  
-  img.onerror = function() {
-    // No image or error loading
-    imgContainer.innerHTML = `
-      <div class="image-placeholder">
-        <i class="fas fa-image"></i>
-        <p>No image available</p>
-      </div>
-    `;
-    currentItemImageExists = false;
-  };
-  
-  img.src = `${API_URL}/items/${itemId}/image`;
-}
-
-// Remove an item's image
-async function removeItemImage() {
-  const itemId = document.getElementById('itemId').value;
-  if (!itemId) {
-    showAlert('No item selected', 'warning', 'itemModalAlerts');
-    return;
-  }
-  
-  // Show loading
-  const removeBtn = document.getElementById('removeImageBtn');
-  const originalBtnText = removeBtn.innerHTML;
-  removeBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Removing...';
-  removeBtn.disabled = true;
-  
-  try {
-    const response = await fetchWithAuth(`${API_URL}/items/${itemId}/image`, {
-      method: 'DELETE'
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to remove image');
-    }
-    
-    // Update UI
-    showAlert('Image removed successfully', 'success', 'itemModalAlerts');
-    
-    // Reset preview
-    document.getElementById('itemImagePreview').innerHTML = `
-      <div class="image-placeholder">
-        <i class="fas fa-image"></i>
-        <p>No image available</p>
-      </div>
-    `;
-    
-    // Reset file input
-    document.getElementById('itemImageFile').value = '';
-    
-    // Update flags
-    currentItemImageExists = false;
-    imageUploadChanged = false;
-  } catch (error) {
-    console.error('Remove image error:', error);
-    showAlert('Failed to remove image: ' + error.message, 'danger', 'itemModalAlerts');
-  } finally {
-    // Reset button
-    removeBtn.innerHTML = originalBtnText;
-    removeBtn.disabled = false;
-  }
-}
 
 
 
@@ -626,9 +534,9 @@ async function removeItemImage() {
 
 
 
-// Modify the setupBarcodeEventListeners function
+
 function setupBarcodeEventListeners() {
-    // Quick barcode search at the top of inventory page
+    
     document.getElementById('quickBarcodeSearch').addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
         e.preventDefault(); // Prevent form submission
@@ -636,7 +544,7 @@ function setupBarcodeEventListeners() {
         if (barcode) {
           findItemByBarcode(barcode);
           
-          // Add visual feedback for scan
+         
           this.classList.add('highlight-scan');
           setTimeout(() => {
             this.classList.remove('highlight-scan');
@@ -648,9 +556,9 @@ function setupBarcodeEventListeners() {
       }
     });
     
-    // Quick scan button - now we'll use native input activation
+    // Quick scan button 
     document.getElementById('quickScanBtn').addEventListener('click', function() {
-      // Focus the input - the physical scanner will input there
+      
       document.getElementById('quickBarcodeSearch').focus();
       showAlert('Ready to scan! Use your barcode scanner now.', 'info');
     });
@@ -674,7 +582,7 @@ function setupBarcodeEventListeners() {
     
     // Scan button in the item modal
     document.getElementById('scanBarcodeBtn').addEventListener('click', function() {
-   // Focus on the input field - the physical scanner will input there
+   
    const itemBarcode = document.getElementById('itemBarcode');
    itemBarcode.focus();
    itemBarcode.select();
@@ -687,10 +595,10 @@ function setupBarcodeEventListeners() {
    }, 3000);
  });
     
-  // Add enter key event to the barcode input field in the item modal
+ 
   document.getElementById('itemBarcode').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
-      e.preventDefault(); // Prevent form submission
+      e.preventDefault(); 
       
       // Visual feedback
       this.classList.add('highlight-scan');
@@ -700,7 +608,7 @@ function setupBarcodeEventListeners() {
       
       // Play a scan sound
       try {
-        // Create a simple beep sound using Web Audio API
+       
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
@@ -720,7 +628,6 @@ function setupBarcodeEventListeners() {
         console.log('Beep sound not supported');
       }
       
-      // Show success message
       showAlert('Barcode scanned successfully!', 'success', 'itemModalAlerts', true);
     }
   });
@@ -730,7 +637,7 @@ function setupBarcodeEventListeners() {
       // Get the item ID
       const itemId = document.getElementById('itemId').value;
       
-      // If we have an item ID, fetch the latest data and print
+
       if (itemId) {
         fetchWithAuth(`${API_URL}/items/${itemId}`)
           .then(response => {
@@ -748,7 +655,7 @@ function setupBarcodeEventListeners() {
             showAlert('Error preparing barcode for printing', 'danger');
           });
       } else {
-        // For new items that haven't been saved yet
+       
         showAlert('Please save the item first before printing the barcode', 'warning');
       }
     });
@@ -778,41 +685,41 @@ function setupBarcodeEventListeners() {
       }
     });
     
-    // Add document-wide keyboard event listener for barcode scanning
+    g
     document.addEventListener('keydown', function(e) {
-      // If we're in a modal, don't trigger the global scanner
+    
       if (document.querySelector('.modal.show')) {
         return;
       }
       
-      // If we're in a text input, textarea, or select, don't trigger the global scanner
+      
       if (document.activeElement.tagName === 'INPUT' || 
           document.activeElement.tagName === 'TEXTAREA' || 
           document.activeElement.tagName === 'SELECT') {
         return;
       }
       
-      // Start focusing on the barcode input if typing starts
+
       if (e.key.length === 1 && e.key.match(/[a-z0-9]/i)) {
         const quickBarcodeSearch = document.getElementById('quickBarcodeSearch');
         quickBarcodeSearch.focus();
-        // The scanner will continue typing into the now-focused field
+      
       }
     });
   }
 
 
-// Add this function for the beep sound
+
 function playBeepSound() {
     try {
-      // Create a simple beep sound using Web Audio API
+
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
       
       oscillator.type = 'sine';
-      oscillator.frequency.value = 1000; // frequency in Hz
-      gainNode.gain.value = 0.1; // volume (0-1)
+      oscillator.frequency.value = 1000;
+      gainNode.gain.value = 0.1; 
       
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
@@ -820,7 +727,7 @@ function playBeepSound() {
       oscillator.start();
       setTimeout(function() {
         oscillator.stop();
-      }, 100); // beep duration in ms
+      }, 100); 
     } catch (e) {
       console.log('Beep sound not supported');
     }
@@ -828,7 +735,7 @@ function playBeepSound() {
 
 
 
-// Update this function
+
 function toggleBarcodeInputMethod() {
     const isScanExisting = document.getElementById('scanExisting').checked;
     const scanBarcodeSection = document.getElementById('scanBarcodeSection');
@@ -839,13 +746,13 @@ function toggleBarcodeInputMethod() {
       return;
     }
 
-      // Immediately blur any focused elements to prevent focus issues when sections are hidden
+    
   document.activeElement.blur();
     
     if (isScanExisting) {
       scanBarcodeSection.classList.remove('d-none');
       generatedBarcodeSection.classList.add('d-none');
-      // Hide preview when using existing barcode
+     
       const previewSection = document.getElementById('previewGeneratedBarcode');
       if (previewSection) {
         previewSection.classList.add('d-none');
@@ -854,17 +761,16 @@ function toggleBarcodeInputMethod() {
       scanBarcodeSection.classList.add('d-none');
       generatedBarcodeSection.classList.remove('d-none');
       
-      // Only show a preview of the generated barcode for new items
-      // or if explicitly changing from existing to generated
+     
       const itemId = document.getElementById('itemId').value;
       const currentBarcodeDisplay = document.getElementById('currentBarcodeDisplay');
       
-      // Only generate preview for new items or if we're changing barcode type
+  
       if (!itemId || (itemId && currentBarcodeDisplay.classList.contains('d-none'))) {
-        // Show a preview of what the generated barcode might look like
+      
         previewGeneratedBarcode();
       } else {
-        // For existing items with barcodes, don't show preview
+       
         const previewSection = document.getElementById('previewGeneratedBarcode');
         if (previewSection) {
           previewSection.classList.add('d-none');
@@ -875,7 +781,7 @@ function toggleBarcodeInputMethod() {
 
 
   function previewGeneratedBarcode() {
-    // Create a stable, cached barcode
+
     if (!generatedBarcode) {
       const prefix = 'CIME';
       const timestamp = Date.now().toString();
@@ -883,19 +789,17 @@ function toggleBarcodeInputMethod() {
       generatedBarcode = `${prefix}-${timestamp.substring(timestamp.length - 6)}-${random}`;
     }
     
-    // Show preview section
+
     document.getElementById('previewGeneratedBarcode').classList.remove('d-none');
     document.getElementById('generatedBarcodeValue').textContent = generatedBarcode;
       
-    // Generate visual preview if JsBarcode is available
     if (typeof JsBarcode !== 'undefined') {
       try {
-        // Create a new canvas for the barcode
+     
         const canvas = document.createElement('canvas');
         document.getElementById('generatedBarcodeImage').innerHTML = '';
         document.getElementById('generatedBarcodeImage').appendChild(canvas);
         
-        // Generate the barcode - using generatedBarcode instead of sampleBarcode
         JsBarcode(canvas, generatedBarcode, {
           format: "CODE128",
           lineColor: "#000",
@@ -916,7 +820,7 @@ function toggleBarcodeInputMethod() {
 
   function startBarcodeScanner(previewElementId, targetInputId) {
     try {
-      // If there's already an active scanner, stop it first
+    
       if (activeScanner && activeScannerElementId) {
         try {
           activeScanner.stop();
@@ -930,7 +834,7 @@ function toggleBarcodeInputMethod() {
       scannerPreview.classList.remove('d-none');
       scannerPreview.innerHTML = '<div class="text-center p-3"><span class="spinner-border spinner-border-sm me-2"></span> Starting camera...</div>';
       
-      // Check if Html5Qrcode is loaded
+
       if (typeof Html5Qrcode === 'undefined') {
         scannerPreview.innerHTML = `
           <div class="alert alert-danger">
@@ -940,7 +844,7 @@ function toggleBarcodeInputMethod() {
         return;
       }
       
-      // Create a new scanner instance
+     
       activeScanner = new Html5Qrcode(previewElementId);
       activeScannerElementId = previewElementId;
       activeScannerTargetId = targetInputId;
@@ -1088,7 +992,7 @@ function stopBarcodeScanner(callback) {
 
 
   function showQuickScanModal() {
-    // Create a modal for the scanner
+   
     const modal = document.createElement('div');
     modal.className = 'modal fade';
     modal.id = 'quickScanModal';
@@ -1116,30 +1020,30 @@ function stopBarcodeScanner(callback) {
     
     document.body.appendChild(modal);
     
-    // Show the modal
+   
     const modalInstance = new bootstrap.Modal(document.getElementById('quickScanModal'));
     modalInstance.show();
     
-    // Initialize scanner when modal is shown
+
     document.getElementById('quickScanModal').addEventListener('shown.bs.modal', () => {
-      // Create a new Html5Qrcode instance
+    
       const html5QrCode = new Html5Qrcode("quickScannerPreview");
       
       html5QrCode.start(
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         async (decodedText) => {
-          // Stop scanning
+       
           try {
             await html5QrCode.stop();
           } catch (e) {
             console.error('Error stopping scanner:', e);
           }
           
-          // Close modal
+        
           modalInstance.hide();
           
-          // Find the item
+         
           findItemByBarcode(decodedText);
         },
         (error) => {
@@ -1156,7 +1060,7 @@ function stopBarcodeScanner(callback) {
       });
     });
     
-    // Clean up when modal is closed
+  
     document.getElementById('quickScanModal').addEventListener('hidden.bs.modal', async () => {
       try {
         const html5QrCode = new Html5Qrcode("quickScannerPreview");
@@ -1167,7 +1071,7 @@ function stopBarcodeScanner(callback) {
         console.error(e);
       }
       
-      // Remove the modal from the DOM
+      
       try {
         document.body.removeChild(document.getElementById('quickScanModal'));
       } catch (e) {
@@ -1217,7 +1121,7 @@ function stopBarcodeScanner(callback) {
 //   }
 
 
-// Function to find and display item by barcode
+
 async function findItemByBarcode(barcode) {
     try {
       showAlert(`Searching for item with barcode: ${barcode}...`, 'info');
@@ -1232,10 +1136,10 @@ async function findItemByBarcode(barcode) {
       if (response.ok) {
         const item = await response.json();
         
-        // Open the item details modal
+   
         openItemModal(item, false);
         
-        // Show success message
+     
         showAlert(`Item found: ${item.name}`, 'success');
       } else if (response.status === 404) {
         showAlert('No item found with this barcode', 'warning');
@@ -1611,7 +1515,7 @@ async function findItemByBarcode(barcode) {
 
 
 
-// Update inventory table with items
+
 function updateInventoryTable(items) {
   const tableBody = document.getElementById('inventoryTable');
   
@@ -1625,20 +1529,19 @@ function updateInventoryTable(items) {
   items.forEach(item => {
     const location = getFormattedLocation(item);
     
-    // Get available quantity
+   
     const availableQuantity = item.availableQuantity !== undefined ? 
       item.availableQuantity : item.quantity;
     
-    // Determine an enhanced status display
+
     let statusDisplay = item.status;
     let statusClass = getStatusBadgeClass(item.status);
     
-    // For partially available items, show how many are available
+    
     if (item.status === 'Partially Available' && item.category !== 'Consumable') {
       statusDisplay = `${availableQuantity}/${item.quantity} Available`;
     }
     
-    // For low stock items, add a visual indicator
     const isLowStock = item.quantity <= item.reorderLevel;
     
     html += `
@@ -1696,7 +1599,7 @@ function updateInventoryTable(items) {
   
   tableBody.innerHTML = html;
   
-  // Add event listeners to action buttons
+ 
   setupActionButtons();
 }
 
@@ -1721,7 +1624,7 @@ function setupActionButtons() {
       const itemName = btn.dataset.name;
       
       if (itemId && itemName) {
-        // openTransactionModal(itemId, itemName);
+       
         fetchItemForTransaction(itemId); 
       }
     });
@@ -1736,7 +1639,7 @@ function setupActionButtons() {
   });
 }
 
-// Update pagination controls
+
 function updatePagination() {
   const paginationEl = document.getElementById('pagination');
   
@@ -1747,18 +1650,17 @@ function updatePagination() {
   const paginationNav = createPagination(currentPage, totalPages, (page) => {
     currentPage = page;
     loadInventoryItems();
-    
-    // Scroll to top of table
+   
     document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
   });
   
   paginationEl.appendChild(paginationNav);
 }
 
-// Load locations and suppliers for the form
+
 async function loadLocationsAndSuppliers() {
   try {
-   // Load locations hierarchy
+  
    fetchWithAuth(`${API_URL}/locations/hierarchy`)
    .then(response => {
      if (response && response.ok) {
@@ -1769,7 +1671,7 @@ async function loadLocationsAndSuppliers() {
    .then(data => {
      locationHierarchy = data;
      
-     // Populate location filter dropdown
+     
      const locationFilter = document.getElementById('locationFilter');
      locationFilter.innerHTML = '<option value="">All Locations</option>';
      
@@ -1777,7 +1679,7 @@ async function loadLocationsAndSuppliers() {
        locationFilter.innerHTML += `<option value="${room._id}">${room.name}</option>`;
      });
      
-     // Populate room dropdown
+    
      const roomSelect = document.getElementById('itemRoom');
      roomSelect.innerHTML = '<option value="">Select Room</option>';
      
@@ -1785,23 +1687,23 @@ async function loadLocationsAndSuppliers() {
        roomSelect.innerHTML += `<option value="${room._id}">${room.name}</option>`;
      });
      
-     // Add event listener to room select for populating racks
+  
      roomSelect.addEventListener('change', () => {
        populateRackDropdown(roomSelect.value);
        
-       // Clear shelf dropdown when room changes
+       
        document.getElementById('itemShelf').innerHTML = '<option value="">Select Shelf</option>';
        document.getElementById('itemShelf').disabled = true;
      });
    });
     
-    // Load suppliers
+
     const suppliersResponse = await fetchWithAuth(`${API_URL}/suppliers`);
     
     if (suppliersResponse && suppliersResponse.ok) {
       suppliers = await suppliersResponse.json();
       
-      // Populate supplier dropdown
+  
       const supplierSelect = document.getElementById('itemSupplier');
       supplierSelect.innerHTML = '<option value="">Select Supplier</option>';
       
@@ -1814,9 +1716,9 @@ async function loadLocationsAndSuppliers() {
   }
 }
 
-// Populate location filter and form dropdowns
+
 function populateLocationDropdowns() {
-  // Populate location filter
+
   const locationFilter = document.getElementById('locationFilter');
   locationFilter.innerHTML = '<option value="">All Locations</option>';
   
@@ -1824,7 +1726,6 @@ function populateLocationDropdowns() {
     locationFilter.innerHTML += `<option value="${room._id}">${room.name}</option>`;
   });
   
-  // Populate room dropdown
   const roomSelect = document.getElementById('itemRoom');
   roomSelect.innerHTML = '<option value="">Select Room</option>';
   
@@ -1832,7 +1733,7 @@ function populateLocationDropdowns() {
     roomSelect.innerHTML += `<option value="${room._id}">${room.name}</option>`;
   });
   
-  // Populate transaction location dropdowns
+ 
   const fromLocationSelect = document.getElementById('transactionFromLocation');
   const toLocationSelect = document.getElementById('transactionToLocation');
   
@@ -1844,13 +1745,13 @@ function populateLocationDropdowns() {
     toLocationSelect.innerHTML += `<option value="${room._id}">${room.name}</option>`;
   });
   
-  // Add event listener to room select for populating racks
+  
   roomSelect.addEventListener('change', () => {
     populateRackDropdown(roomSelect.value);
   });
 }
 
-// Populate rack dropdown based on selected room
+
 function populateRackDropdown(roomId) {
   const rackSelect = document.getElementById('itemRack');
   rackSelect.innerHTML = '<option value="">Select Rack</option>';
@@ -1861,18 +1762,18 @@ function populateRackDropdown(roomId) {
     return;
   }
   
-  // Find the selected room
+  
   const room = locationHierarchy.find(r => r._id === roomId);
   
   if (room && room.racks && room.racks.length > 0) {
     rackSelect.disabled = false;
     
     room.racks.forEach(rack => {
-      // Include room name in the rack option text for clarity
+   
       rackSelect.innerHTML += `<option value="${rack._id}">${rack.name} (in ${room.name})</option>`;
     });
     
-    // Add event listener to rack select for populating shelves
+    
     rackSelect.addEventListener('change', () => {
       populateShelfDropdown(roomId, rackSelect.value);
     });
@@ -1882,7 +1783,7 @@ function populateRackDropdown(roomId) {
   }
 }
 
-// Populate shelf dropdown based on selected rack
+
 function populateShelfDropdown(roomId, rackId) {
   const shelfSelect = document.getElementById('itemShelf');
   shelfSelect.innerHTML = '<option value="">Select Shelf</option>';
@@ -1892,7 +1793,7 @@ function populateShelfDropdown(roomId, rackId) {
     return;
   }
   
-  // Find the selected room
+
   const room = locationHierarchy.find(r => r._id === roomId);
   
   if (!room) {
@@ -1900,14 +1801,14 @@ function populateShelfDropdown(roomId, rackId) {
     return;
   }
   
-  // Find the selected rack
+ 
   const rack = room.racks.find(r => r._id === rackId);
   
   if (rack && rack.shelves && rack.shelves.length > 0) {
     shelfSelect.disabled = false;
     
     rack.shelves.forEach(shelf => {
-      // Include room and rack names in the shelf option for clarity
+     
       shelfSelect.innerHTML += `<option value="${shelf._id}">${shelf.name} (in ${rack.name}, ${room.name})</option>`;
     });
   } else {
@@ -1915,7 +1816,7 @@ function populateShelfDropdown(roomId, rackId) {
   }
 }
 
-// Get formatted location string
+
 function getFormattedLocation(item) {
   if (!item.location) return 'N/A';
   
@@ -1936,10 +1837,10 @@ function getFormattedLocation(item) {
   return location || 'N/A';
 }
 
-// Load item details by ID
+
 async function loadItemDetails(itemId, isEdit = false) {
     try {
-      // Show loading indicator
+      
       showAlert('Loading item details...', 'info', 'alertContainer', false);
       
       const response = await fetchWithAuth(`${API_URL}/items/${itemId}`);
@@ -1949,10 +1850,10 @@ async function loadItemDetails(itemId, isEdit = false) {
       if (response.ok) {
         const item = await response.json();
         
-        // Clear any previous alerts
+      
         document.getElementById('alertContainer').innerHTML = '';
         
-        // Open the modal with item details
+        
         openItemModal(item, isEdit);
       } else {
         const errorData = await response.json();
@@ -1964,42 +1865,27 @@ async function loadItemDetails(itemId, isEdit = false) {
     }
   }
 
-// Open item modal with details
-// Fixed openItemModal function with null checks
+
 function openItemModal(item, isEdit = false) {
   try {
 
-// Reset image change tracking
+
   itemImageChanged = false;
   
-  // Load item image if we have an item ID
-  if (item._id) {
-    loadItemImage(item._id);
-    currentItemHasImage = !!item.image; // Set based on item data
-  } else {
-    // Reset image preview for new items
-    document.getElementById('itemImagePreview').innerHTML = `
-      <div class="image-placeholder">
-        <i class="fas fa-image"></i>
-        <p>No image available</p>
-      </div>
-    `;
-    currentItemHasImage = false;
-  }
 
 
-     // Set category and update form fields accordingly
+     
   document.getElementById('itemCategory').value = item.category || '';
   updateFormFieldsBasedOnCategory(item.category || '');
 
 
-// Reset barcode editing state whenever the modal opens
+
 const changeBarcode = document.getElementById('changeBarcode');
 if (changeBarcode) {
   changeBarcode.checked = false;
 }
 
-// Reset the barcode options form visibility
+
 const newBarcodeForm = document.getElementById('newBarcodeForm');
 if (newBarcodeForm) {
   newBarcodeForm.classList.add('d-none');
@@ -2011,20 +1897,20 @@ if (newBarcodeForm) {
     const form = document.getElementById('itemForm');
     const saveBtn = document.getElementById('saveItemBtn');
     
-    // Check if elements exist before proceeding
+   
     if (!modal || !modalTitle || !form || !saveBtn) {
       console.error('Required modal elements not found');
       showAlert('Error loading item modal. Please refresh the page and try again.', 'danger');
       return;
     }
     
-    // Reset generatedBarcode to ensure a fresh one if needed
+   
     generatedBarcode = null;
     
-    // Set modal title
+ 
     modalTitle.textContent = isEdit ? 'Edit Item' : 'Item Details';
     
-    // Fill form fields
+    
     document.getElementById('itemId').value = item._id || '';
     document.getElementById('itemName').value = item.name || '';
     // document.getElementById('itemCategory').value = item.category || '';
@@ -2037,11 +1923,11 @@ if (newBarcodeForm) {
     const predefinedCategories = ['Task Trainer', 'Manikin', 'Consumable', 'Electronic', 'Other'];
     
     if (predefinedCategories.includes(item.category)) {
-      // It's a standard category
+      
       categorySelect.value = item.category;
       if (customCategoryGroup) customCategoryGroup.style.display = 'none';
     } else {
-      // It's a custom category
+     
       categorySelect.value = 'Other';
       if (customCategoryGroup) customCategoryGroup.style.display = 'block';
       if (customCategoryInput) customCategoryInput.value = item.category;
@@ -2061,16 +1947,16 @@ if (newBarcodeForm) {
     if (item.location) {
       if (item.location.room) {
         document.getElementById('itemRoom').value = item.location.room._id || '';
-        // Call populateRackDropdown but wait for it to finish before setting rack value
+      
         populateRackDropdown(item.location.room._id);
         
-        // We need to wait a moment for the rack dropdown to be populated
+       
         setTimeout(() => {
           if (item.location.rack) {
             document.getElementById('itemRack').value = item.location.rack._id || '';
             populateShelfDropdown(item.location.room._id, item.location.rack._id);
             
-            // Wait for shelf dropdown to be populated
+           
             setTimeout(() => {
               if (item.location.shelf) {
                 document.getElementById('itemShelf').value = item.location.shelf._id || '';
@@ -2081,7 +1967,7 @@ if (newBarcodeForm) {
       }
     }
     
-    // Set dates if available
+    
     if (item.purchaseDate) {
       document.getElementById('itemPurchaseDate').value = new Date(item.purchaseDate).toISOString().split('T')[0];
     } else {
@@ -2102,7 +1988,7 @@ if (newBarcodeForm) {
     
     document.getElementById('itemNotes').value = item.notes || '';
     
-    // Handle the barcode section - simplified for better user experience
+   
     const barcodeRow = document.getElementById('barcodeRow');
     if (barcodeRow) {
       barcodeRow.style.display = 'block';
@@ -2159,48 +2045,46 @@ if (newBarcodeForm) {
         if (barcodeOptionsSection) barcodeOptionsSection.classList.add('d-none');
         if (changeBarcodeSection) changeBarcodeSection.classList.remove('d-none');
       } else {
-        // View mode - hide all options
+        // View mode 
         if (barcodeOptionsSection) barcodeOptionsSection.classList.add('d-none');
         if (changeBarcodeSection) changeBarcodeSection.classList.add('d-none');
       }
     } else if (item._id && !item.barcode) {
-      // EXISTING ITEM WITHOUT BARCODE (rare case)
+     
       
-      // Hide current barcode display
+   
       if (currentBarcodeDisplay) currentBarcodeDisplay.classList.add('d-none');
       
-      // In edit mode, show options to add a barcode
+    
       if (isEdit) {
         if (barcodeOptionsSection) barcodeOptionsSection.classList.remove('d-none');
         if (newBarcodeOptionsSection) newBarcodeOptionsSection.classList.remove('d-none');
         if (changeBarcodeSection) changeBarcodeSection.classList.add('d-none');
         
-        // Default to scanning an existing barcode
+       
         document.getElementById('scanExisting').checked = true;
         document.getElementById('generateNew').checked = false;
         toggleBarcodeInputMethod();
       } else {
-        // View mode - hide all options
+       
         if (barcodeOptionsSection) barcodeOptionsSection.classList.add('d-none');
       }
     } else {
-      // NEW ITEM
       
-      // Hide current barcode display and change options
+      
       if (currentBarcodeDisplay) currentBarcodeDisplay.classList.add('d-none');
       if (changeBarcodeSection) changeBarcodeSection.classList.add('d-none');
       
-      // Show barcode type options
       if (barcodeOptionsSection) barcodeOptionsSection.classList.remove('d-none');
       if (newBarcodeOptionsSection) newBarcodeOptionsSection.classList.remove('d-none');
       
-      // Default to generating a new barcode for new items
+      
       document.getElementById('scanExisting').checked = false;
       document.getElementById('generateNew').checked = true;
       toggleBarcodeInputMethod();
     }
     
-    // Set form fields readonly or editable based on mode
+
     const formFields = form.querySelectorAll('input, textarea, select');
     formFields.forEach(field => {
       field.readOnly = !isEdit;
@@ -2209,10 +2093,10 @@ if (newBarcodeForm) {
       }
     });
     
-    // Show/hide save button based on mode
+    
     saveBtn.style.display = isEdit ? 'block' : 'none';
     
-    // Open the modal
+  
     const modalInstance = new bootstrap.Modal(modal);
     modalInstance.show();
   } catch (error) {
@@ -2222,30 +2106,29 @@ if (newBarcodeForm) {
 }
 
 
-// Update the category dropdown in the HTML
-// Replace your current <select> for category with this:
+
 function updateCategoryOptions() {
   const categorySelect = document.getElementById('itemCategory');
   
-  // Clear existing options
+
   categorySelect.innerHTML = '';
   
-  // Add default empty option
+  
   const defaultOption = document.createElement('option');
   defaultOption.value = '';
   defaultOption.textContent = 'Select Category';
   categorySelect.appendChild(defaultOption);
   
-  // Define main categories
+  
   const categories = [
     { value: 'Task Trainer', label: 'Task Trainer' },
     { value: 'Manikin', label: 'Manikin' },
     { value: 'Consumable', label: 'Consumable' },
-    { value: 'Electronic', label: 'Electronic Device' }, // Merged category
+    { value: 'Electronic', label: 'Electronic Device' }, 
     { value: 'Other', label: 'Other (Custom)' }
   ];
   
-  // Add options to select
+
   categories.forEach(category => {
     const option = document.createElement('option');
     option.value = category.value;
@@ -2260,10 +2143,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   setupImprovedTransactionButtons();
 
-    // Call after page loads
+   
     setTimeout(replaceTransactionButtons, 500);
   
-  // Show/hide custom category field based on selection
+
   const categorySelect = document.getElementById('itemCategory');
   const customCategoryGroup = document.getElementById('customCategoryGroup');
   
@@ -2297,9 +2180,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
   
-  // Update the toggleBarcodeInputMethod function with null checks
+ 
   function toggleBarcodeInputMethod() {
-    // Safely get elements
+
     const scanExisting = document.getElementById('scanExisting');
     const scanBarcodeSection = document.getElementById('scanBarcodeSection');
     const generatedBarcodeSection = document.getElementById('generatedBarcodeSection');
@@ -2319,7 +2202,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (isScanExisting) {
       scanBarcodeSection.classList.remove('d-none');
       generatedBarcodeSection.classList.add('d-none');
-      // Hide preview when using existing barcode
+    
       const previewSection = document.getElementById('previewGeneratedBarcode');
       if (previewSection) {
         previewSection.classList.add('d-none');
@@ -2328,9 +2211,9 @@ document.addEventListener('DOMContentLoaded', function() {
       scanBarcodeSection.classList.add('d-none');
       generatedBarcodeSection.classList.remove('d-none');
       
-      // Only show a preview of the generated barcode if appropriate
+
       try {
-        // Show a preview of what the generated barcode might look like
+     
         previewGeneratedBarcode();
       } catch (e) {
         console.error('Error generating barcode preview:', e);
@@ -2349,7 +2232,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (changeBarcode.checked) {
         newBarcodeForm.classList.remove('d-none');
         
-        // Initialize the radio buttons - default to using existing barcode
+     
         const useExistingBarcode = document.getElementById('useExistingBarcode');
         const generateNewBarcode = document.getElementById('generateNewBarcode');
         
@@ -2357,7 +2240,7 @@ document.addEventListener('DOMContentLoaded', function() {
           useExistingBarcode.checked = true;
         }
         
-        // Show/hide the appropriate form sections
+      
         updateBarcodeFormVisibility();
       } else {
         newBarcodeForm.classList.add('d-none');
@@ -2415,7 +2298,7 @@ function setupBarcodeChangeListeners() {
     });
   }
   
-  // listeners for the useExistingBarcode and generateNewBarcode elements
+
   const useExistingBarcode = document.getElementById('useExistingBarcode');
   const generateNewBarcode = document.getElementById('generateNewBarcode');
   
@@ -2447,7 +2330,6 @@ function updateBarcodeFormVisibility() {
 
 // Open transaction modal
 /**
- * Fixed function to properly open the transaction modal
  * @param {string} itemId - The ID of the item
  * @param {string} itemName - The name of the item
  */
@@ -2471,13 +2353,6 @@ function addModalFixStyles() {
 
 
 
-
-
-
-
-
-
-// Add this CSS fix to fix z-index issues
 function addModalCssFix() {
   const style = document.createElement('style');
   style.textContent = `
@@ -2494,50 +2369,48 @@ function addModalCssFix() {
   document.head.appendChild(style);
 }
 
-// Run this fix as soon as possible
 addModalCssFix();
 
-// Update transaction form based on type
 
 
 
 
 
 
-// Create a utility function to properly close modals
+
 function safeCloseModal(modalElement) {
   if (!modalElement) return;
   
-  // First, shift focus away from any elements inside the modal
+
   document.body.focus();
   
-  // Get the modal instance
+
   const modalInstance = bootstrap.Modal.getInstance(modalElement);
   if (!modalInstance) return;
   
-  // Hide the modal
+
   modalInstance.hide();
   
-  // Clean up after the modal is hidden
+  
   setTimeout(() => {
-    // Remove aria-hidden attribute
+
     modalElement.removeAttribute('aria-hidden');
     
-    // Remove modal-open class from body
+    
     document.body.classList.remove('modal-open');
     
-    // Reset other modal-related styles
+   
     document.body.style.overflow = '';
     document.body.style.paddingRight = '';
     
-    // Remove any leftover backdrops
+ 
     document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
       backdrop.remove();
     });
     
-    // Make sure display style is set to none
+
     modalElement.style.display = 'none';
-  }, 300); // Allow time for the modal hide animation to complete
+  }, 300); 
 }
 
 
@@ -2554,7 +2427,7 @@ function saveItem() {
     let finalCategory = category;
     let categoryType = category;
 
-    // Handle custom category if "Other" is selected
+    
     if (category === 'Other') {
       const customCategory = document.getElementById('customCategory').value;
       if (customCategory && customCategory.trim() !== '') {
@@ -2562,7 +2435,7 @@ function saveItem() {
         categoryType = 'Custom';
       }
     } else {
-      // For standard categories, use the category value as categoryType
+      
       categoryType = category;
     }
     const status = document.getElementById('itemStatus').value;
@@ -2590,31 +2463,31 @@ function saveItem() {
     let barcodeType;
     let barcode;
     
-    // Check if we have the new change barcode UI
+   
     const changeBarcode = document.getElementById('changeBarcode');
     
     if (itemId) {
-      // EXISTING ITEM
+    
       console.log('Processing existing item with ID:', itemId);
       
       if (changeBarcode && changeBarcode.checked) {
-        // User wants to change the barcode
+
         console.log('User is changing the barcode');
         const useExistingBarcode = document.getElementById('useExistingBarcode');
         
         if (useExistingBarcode && useExistingBarcode.checked) {
-          // Using a new manually entered barcode
+     
           barcode = document.getElementById('newItemBarcode')?.value || '';
           barcodeType = 'existing';
           console.log('Using new manually entered barcode:', barcode);
         } else {
-          // Generate a new barcode
+      
           barcodeType = 'generate';
           barcode = '';
           console.log('Will generate a new barcode on server');
         }
       } else {
-        // Keep existing barcode
+    
         const currentBarcodeValue = document.getElementById('currentBarcodeValue');
         const currentBarcodeType = document.getElementById('currentBarcodeType');
         
@@ -2625,14 +2498,14 @@ function saveItem() {
           
           console.log('Keeping existing barcode:', barcode, 'of type:', barcodeType);
         } else {
-          // Fallback to original UI
+       
           barcodeType = document.getElementById('scanExisting')?.checked ? 'existing' : 'generate';
           barcode = barcodeType === 'existing' ? document.getElementById('itemBarcode')?.value || '' : '';
           console.log('Using fallback barcode handling:', barcode, 'of type:', barcodeType);
         }
       }
     } else {
-      // NEW ITEM
+   
       console.log('Processing new item');
       
       const scanExisting = document.getElementById('scanExisting');
@@ -2642,28 +2515,28 @@ function saveItem() {
         barcode = barcodeType === 'existing' ? document.getElementById('itemBarcode')?.value || '' : '';
         console.log('New item barcode handling:', barcode, 'of type:', barcodeType);
       } else {
-        // Default to generating a barcode
+     
         barcodeType = 'generate';
         barcode = '';
         console.log('Defaulting to generating a barcode');
       }
     }
     
-    // Validate barcode if using existing
+ 
     if (barcodeType === 'existing' && !barcode) {
       console.warn('Missing barcode for existing barcode type');
       showAlert('Please enter or scan the existing barcode', 'warning');
       return;
     }
     
-    // Validate required fields
+
     if (!name || !category || !quantity || !room) {
       console.warn('Missing required fields');
       showAlert('Please fill in all required fields', 'danger');
       return;
     }
     
-    // Prepare item data
+   
     const itemData = {
       name,
       category: finalCategory,
@@ -2692,7 +2565,7 @@ function saveItem() {
     
     console.log('Prepared item data:', itemData);
     
-    // Show loading state
+    
     const saveBtn = document.getElementById('saveItemBtn');
     if (!saveBtn) {
       console.error('Save button not found');
@@ -2703,7 +2576,7 @@ function saveItem() {
     saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Saving...';
     saveBtn.disabled = true;
     
-    // Determine if this is a create or update operation
+   
     const apiUrl = itemId ? 
       `${API_URL}/items/${itemId}` : 
       `${API_URL}/items`;
@@ -2713,7 +2586,7 @@ function saveItem() {
     
     console.log(`Making ${method} request to ${apiUrl}`);
     
-    // Make API request
+   
     fetchWithAuth(apiUrl, {
       method: method,
       headers: {
@@ -2722,7 +2595,7 @@ function saveItem() {
       body: JSON.stringify(itemData)
     })
     .then(response => {
-      // Reset button state
+     
       saveBtn.innerHTML = 'Save Item';
       saveBtn.disabled = false;
       
@@ -2744,7 +2617,7 @@ function saveItem() {
           // Show success message
           showAlert(`${messagePrefix} successfully`, 'success');
           
-          // Check if a barcode was generated or changed
+         
           const hadNewBarcodeGenerated = 
             (!itemId && item.barcodeType === 'generate') || 
             (itemId && barcodeType === 'generate' && changeBarcode?.checked && 
@@ -2756,7 +2629,7 @@ function saveItem() {
             }
           }
           
-          // Reload inventory
+         
           loadInventoryItems();
         });
       } else {
@@ -2791,7 +2664,7 @@ function saveItem() {
     }
   }
 }
-// Save transaction
+
 
 
 
@@ -2837,10 +2710,10 @@ function exportToCSV() {
     const headers = ['Item Name', 'Category', 'Quantity', 'Status', 'Location'];
     csvContent += headers.join(',') + '\n';
     
-    // Add rows (skip header and select all checkbox column)
+    // Add rows 
     for (let i = 1; i < rows.length; i++) {
       const cells = rows[i].querySelectorAll('td');
-      if (cells.length <= 1) continue; // Skip "no items found" row
+      if (cells.length <= 1) continue; 
       
       const rowData = [
         `"${cells[1].querySelector('h6').textContent}"`, // Item name
@@ -2880,7 +2753,7 @@ function printInventory() {
 
 
 function updateFormFieldsBasedOnCategory(category) {
-  // Get references to conditional fields
+  
   const statusGroup = document.querySelector('.form-group-status');
   const maintenanceDatesGroup = document.querySelector('.form-group-maintenance');
   const rentalFieldsGroup = document.querySelector('.form-group-rental');
@@ -2908,13 +2781,13 @@ function updateFormFieldsBasedOnCategory(category) {
     // Add category-specific options
     switch(category) {
       case 'Consumable':
-        // Consumables have simpler status options
+    
         const outOfStockOption = document.createElement('option');
         outOfStockOption.value = 'Out of Stock';
         outOfStockOption.textContent = 'Out of Stock';
         statusSelect.appendChild(outOfStockOption);
         
-        // Hide irrelevant fields for consumables
+      
         if (maintenanceDatesGroup) maintenanceDatesGroup.style.display = 'none';
         break;
         
@@ -2922,7 +2795,7 @@ function updateFormFieldsBasedOnCategory(category) {
       case 'Manikin':
       case 'Electronic':
       case 'Device':
-        // Equipment has all status options
+       
         const maintenanceOption = document.createElement('option');
         maintenanceOption.value = 'Under Maintenance';
         maintenanceOption.textContent = 'Under Maintenance';
@@ -2941,7 +2814,7 @@ function updateFormFieldsBasedOnCategory(category) {
         
       case 'Other':
       default:
-        // Add all options for "Other" category
+     
         const maintenanceDefaultOption = document.createElement('option');
         maintenanceDefaultOption.value = 'Under Maintenance';
         maintenanceDefaultOption.textContent = 'Under Maintenance';
@@ -3180,7 +3053,7 @@ function testBarcodeScanning() {
 function setupEnhancedTransactions() {
   console.log("Setting up enhanced transaction functionality");
   
-  // 1. Attach event listeners to transaction buttons
+ 
   document.addEventListener('click', function(e) {
     const transactionBtn = e.target.closest('.transaction-btn');
     if (transactionBtn) {
@@ -3197,7 +3070,7 @@ function setupEnhancedTransactions() {
     }
   });
   
-  // 2. Set up transaction type change handler
+
   const transactionTypeSelect = document.getElementById('enhancedTransactionType');
   if (transactionTypeSelect) {
     transactionTypeSelect.addEventListener('change', function() {
@@ -3205,16 +3078,16 @@ function setupEnhancedTransactions() {
     });
   }
   
-  // 3. Set up save button handler
+
   const saveBtn = document.getElementById('enhancedSaveTransactionBtn');
   if (saveBtn) {
     saveBtn.addEventListener('click', saveEnhancedTransaction);
   }
   
-  // 4. Load locations for dropdowns
+
   loadLocationsForTransaction();
 
-  // Setup close button handlers
+
 const closeButtons = document.querySelectorAll('#enhancedTransactionModal .btn-close, #enhancedTransactionModal .btn-secondary');
 closeButtons.forEach(button => {
   button.addEventListener('click', function(e) {
@@ -3225,7 +3098,7 @@ closeButtons.forEach(button => {
   });
 });
 
-// Add escape key handler
+
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     const modal = document.getElementById('enhancedTransactionModal');
@@ -3240,7 +3113,6 @@ document.addEventListener('keydown', function(e) {
 
 
 
-// Load locations for transaction dropdowns
 async function loadLocationsForTransaction() {
   try {
     const response = await fetchWithAuth(`${API_URL}/locations/hierarchy`);
@@ -3282,14 +3154,14 @@ function updateEnhancedTransactionForm(type) {
   const rentalDetailsGroup = document.getElementById('enhancedRentalDetailsGroup');
   const maintenanceDetailsGroup = document.getElementById('enhancedMaintenanceDetailsGroup');
   
-  // Hide all groups first
+
   if (fromLocationGroup) fromLocationGroup.style.display = 'none';
   if (toLocationGroup) toLocationGroup.style.display = 'none';
   if (sessionDetailsGroup) sessionDetailsGroup.style.display = 'none';
   if (rentalDetailsGroup) rentalDetailsGroup.style.display = 'none';
   if (maintenanceDetailsGroup) maintenanceDetailsGroup.style.display = 'none';
   
-  // Show relevant groups based on transaction type
+ 
   switch(type) {
     case 'Stock Addition':
       // No special fields needed
@@ -3336,11 +3208,11 @@ function updateEnhancedTransactionForm(type) {
       break;
   }
   
-  // Set the max quantity based on transaction type and item state
+
   updateQuantityLimits(type);
 }
 
-// Update quantity limits based on transaction type
+
 function updateQuantityLimits(type) {
   if (!transactionItemData) return;
   
@@ -3410,14 +3282,14 @@ async function saveEnhancedTransaction() {
       return;
     }
     
-    // Build transaction data object
+ 
     const transactionData = {
       type,
       quantity: parseInt(quantity),
       notes: document.getElementById('enhancedTransactionNotes').value
     };
     
-    // Add location data if visible and selected
+  
     const fromLocationGroup = document.getElementById('enhancedFromLocationGroup');
     if (fromLocationGroup && fromLocationGroup.style.display !== 'none') {
       const fromLocation = document.getElementById('enhancedTransactionFromLocation').value;
@@ -3434,7 +3306,7 @@ async function saveEnhancedTransaction() {
       }
     }
     
-    // Add session data if visible and filled
+
     const sessionDetailsGroup = document.getElementById('enhancedSessionDetailsGroup');
     if (sessionDetailsGroup && sessionDetailsGroup.style.display !== 'none') {
       const sessionName = document.getElementById('enhancedSessionName').value;
@@ -3448,7 +3320,7 @@ async function saveEnhancedTransaction() {
       }
     }
     
-    // Add rental data if visible and filled
+    
     const rentalDetailsGroup = document.getElementById('enhancedRentalDetailsGroup');
     if (rentalDetailsGroup && rentalDetailsGroup.style.display !== 'none') {
       const rentedTo = document.getElementById('enhancedRentedTo').value;
@@ -3465,7 +3337,7 @@ async function saveEnhancedTransaction() {
       }
     }
     
-    // Add maintenance data if visible and filled
+   
     const maintenanceDetailsGroup = document.getElementById('enhancedMaintenanceDetailsGroup');
     if (maintenanceDetailsGroup && maintenanceDetailsGroup.style.display !== 'none') {
       const provider = document.getElementById('enhancedMaintenanceProvider').value;
@@ -3479,14 +3351,14 @@ async function saveEnhancedTransaction() {
       }
     }
     
-    // Show loading state
+    
     const saveBtn = document.getElementById('enhancedSaveTransactionBtn');
     if (saveBtn) {
       saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Saving...';
       saveBtn.disabled = true;
     }
     
-    // Send the request
+  
     const response = await fetchWithAuth(`${API_URL}/items/${itemId}/enhanced-transaction`, {
       method: 'POST',
       headers: {
@@ -3495,7 +3367,7 @@ async function saveEnhancedTransaction() {
       body: JSON.stringify(transactionData)
     });
     
-    // Reset button state
+  
     if (saveBtn) {
       saveBtn.innerHTML = 'Save Transaction';
       saveBtn.disabled = false;
@@ -3542,7 +3414,7 @@ async function saveEnhancedTransaction() {
 
 
 
-// Function to directly show the enhanced transaction modal without Bootstrap
+
 function showEnhancedModalDirectly(item) {
   if (!item) return;
   
@@ -3552,35 +3424,34 @@ function showEnhancedModalDirectly(item) {
     console.error('Enhanced transaction modal not found');
     return;
   }
-  
-  // Clean up any existing modal state first
+
   closeEnhancedModalDirectly();
   
-  // Manually add the classes and styles Bootstrap would add
+
   document.body.classList.add('modal-open');
   document.body.style.overflow = 'hidden';
-  document.body.style.paddingRight = '15px'; // Compensate for scrollbar
+  document.body.style.paddingRight = '15px'; 
   
-  // Create backdrop if it doesn't exist
+
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop fade show';
   backdrop.id = 'custom-modal-backdrop';
   document.body.appendChild(backdrop);
   
-  // Show modal
+
   modal.classList.add('show');
   modal.style.display = 'block';
   modal.setAttribute('aria-modal', 'true');
   modal.removeAttribute('aria-hidden');
   
-  // Set item details
+
   document.getElementById('enhancedTransactionItemId').value = item._id;
   document.getElementById('enhancedTransactionItem').value = item.name;
   
-  // Configure transaction types based on item
+ 
   configureTransactionTypes(item);
   
-  // Set quantity max
+
   const quantityInput = document.getElementById('enhancedTransactionQuantity');
   if (quantityInput) {
     const availableQuantity = item.availableQuantity !== undefined ? 
@@ -3592,7 +3463,7 @@ function showEnhancedModalDirectly(item) {
   console.log('Enhanced modal shown manually');
 }
 
-// Function to close the enhanced transaction modal
+
 function closeEnhancedModalDirectly() {
   const modal = document.getElementById('enhancedTransactionModal');
   if (modal) {
@@ -3601,8 +3472,7 @@ function closeEnhancedModalDirectly() {
     modal.removeAttribute('aria-modal');
     modal.setAttribute('aria-hidden', 'true');
   }
-  
-  // Remove backdrop - both with id and by class name to be thorough
+
   const customBackdrop = document.getElementById('custom-modal-backdrop');
   if (customBackdrop) {
     customBackdrop.remove();
@@ -3612,7 +3482,7 @@ function closeEnhancedModalDirectly() {
     el.remove();
   });
   
-  // Reset body
+
   document.body.classList.remove('modal-open');
   document.body.style.overflow = '';
   document.body.style.paddingRight = '';
@@ -3660,7 +3530,7 @@ function setupEventListeners() {
       updateFormFieldsBasedOnCategory(this.value);
     });
     
-// Add new item button
+
 const addItemBtn = document.getElementById('addItemBtn');
 if (addItemBtn) {
   addItemBtn.addEventListener('click', () => {
@@ -3671,33 +3541,30 @@ if (addItemBtn) {
     // Clear hidden fields
     const itemId = document.getElementById('itemId');
     if (itemId) itemId.value = '';
-    
-    // IMPORTANT: Completely reset the barcode section to its original state
-    // Hide the current barcode display
+
     const currentBarcodeDisplay = document.getElementById('currentBarcodeDisplay');
     if (currentBarcodeDisplay) currentBarcodeDisplay.classList.add('d-none');
-    
-    // Hide the change barcode section (this is only for editing)
+
     const changeBarcodeSection = document.getElementById('changeBarcodeSection');
     if (changeBarcodeSection) changeBarcodeSection.classList.add('d-none');
     
-    // Reset the change barcode checkbox if it exists
+  
     const changeBarcode = document.getElementById('changeBarcode');
     if (changeBarcode) changeBarcode.checked = false;
     
-    // Hide the new barcode form (part of change barcode)
+
     const newBarcodeForm = document.getElementById('newBarcodeForm');
     if (newBarcodeForm) newBarcodeForm.classList.add('d-none');
     
-    // Show the original barcode options section for new items
+    
     const barcodeOptionsSection = document.getElementById('barcodeOptionsSection');
     if (barcodeOptionsSection) barcodeOptionsSection.classList.remove('d-none');
     
-    // Show new barcode options section (radio buttons)
+
     const newBarcodeOptionsSection = document.getElementById('newBarcodeOptionsSection');
     if (newBarcodeOptionsSection) newBarcodeOptionsSection.classList.remove('d-none');
     
-    // Set barcode radio buttons to default (generate)
+
     if (document.getElementById('generateNew')) {
       document.getElementById('generateNew').checked = true;
     }
@@ -3705,18 +3572,18 @@ if (addItemBtn) {
       document.getElementById('scanExisting').checked = false;
     }
     
-    // Toggle barcode sections based on selected option
+  
     toggleBarcodeInputMethod();
 
 
 
-     // Set default category
+  
      const categorySelect = document.getElementById('itemCategory');
      categorySelect.value = '';
 
 
 
-       // Initialize form fields based on empty category
+   
     updateFormFieldsBasedOnCategory('');
 
     
@@ -3748,22 +3615,22 @@ if (addItemBtn) {
 }
 
     
-    // Handle modal hidden event (add this as a separate section)
+   
     const itemModal = document.getElementById('itemModal');
     if (itemModal) {
       itemModal.addEventListener('hidden.bs.modal', function() {
-        // Fix ARIA issues - this needs to happen first
+    
         setTimeout(() => {
-          // Remove focus from any elements inside the modal to prevent ARIA issues
+  
           document.activeElement.blur();
           
-          // Remove aria-hidden attribute and restore normal state
+       
           itemModal.removeAttribute('aria-hidden');
           document.body.classList.remove('modal-open');
           document.body.style.overflow = '';
           document.body.style.paddingRight = '';
           
-          // Remove any stray backdrop elements
+    
           const backdrops = document.querySelectorAll('.modal-backdrop');
           backdrops.forEach(backdrop => backdrop.remove());
         }, 10);
@@ -3773,8 +3640,7 @@ if (addItemBtn) {
     // Save item button
     document.getElementById('saveItemBtn').addEventListener('click', saveItem);
   
-  // Save transaction button
-  // document.getElementById('saveTransactionBtn').addEventListener('click', saveTransaction);
+
   
   // Export button
   document.getElementById('exportBtn').addEventListener('click', exportToCSV);
@@ -3787,7 +3653,7 @@ document.getElementById('printBarcodeBtn').addEventListener('click', () => {
   // Get the item ID
   const itemId = document.getElementById('itemId').value;
   
-  // If we have an item ID, fetch the latest data and print
+
   if (itemId) {
     fetchWithAuth(`${API_URL}/items/${itemId}`)
       .then(response => {
@@ -3805,12 +3671,12 @@ document.getElementById('printBarcodeBtn').addEventListener('click', () => {
         showAlert('Error preparing barcode for printing', 'danger');
       });
   } else {
-    // For new items that haven't been saved yet
+ 
     showAlert('Please save the item first before printing the barcode', 'warning');
   }
 });
   
-  // Select all checkbox
+
   document.getElementById('selectAll').addEventListener('change', (e) => {
     const checkboxes = document.querySelectorAll('.item-checkbox');
     checkboxes.forEach(checkbox => {
@@ -3818,13 +3684,13 @@ document.getElementById('printBarcodeBtn').addEventListener('click', () => {
     });
   });
 
-// Add a button to the inventory page to test barcodes
+
 const testBarcodesBtn = document.createElement('button');
 testBarcodesBtn.className = 'btn btn-sm btn-outline-secondary ms-2';
 testBarcodesBtn.innerHTML = '<i class="fas fa-vial me-1"></i> Test Barcodes';
 testBarcodesBtn.addEventListener('click', testBarcodeScanning);
 
-// Insert the button in the toolbar
+
 const btnToolbar = document.querySelector('.btn-toolbar');
 if (btnToolbar) {
   btnToolbar.appendChild(testBarcodesBtn);
@@ -3839,9 +3705,6 @@ if (transactionType) {
 
 
 
-
-
-
 }
 
 
@@ -3849,20 +3712,10 @@ if (transactionType) {
 
 
 
-// Add this to public/js/inventory.js
-
-/**
- * REVISED TRANSACTION SYSTEM
- * 
- * This implementation provides a simplified and more reliable approach
- * for handling inventory transactions directly on the inventory page.
- */
-
-// First, let's add a simple function to open the transaction modal
 function openTransactionDialog(item) {
   console.log('Opening transaction dialog for item:', item);
   
-  // Create a dedicated modal for transactions if it doesn't exist yet
+ 
   let transactionModal = document.getElementById('simpleTransactionModal');
   
   if (!transactionModal) {
@@ -3992,12 +3845,12 @@ function openTransactionDialog(item) {
       </div>
     `;
     
-    // Add the modal to the body
+   
     const modalContainer = document.createElement('div');
     modalContainer.innerHTML = modalHtml;
     document.body.appendChild(modalContainer.firstChild);
     
-    // Set up event listeners for the new modal
+ 
     document.getElementById('transactionType').addEventListener('change', function() {
       updateTransactionFormFields(this.value);
     });
@@ -4005,10 +3858,10 @@ function openTransactionDialog(item) {
     document.getElementById('saveTransactionBtn').addEventListener('click', saveTransaction);
   }
   
-  // Populate transaction type options based on item category and status
+
   populateTransactionTypes(item);
   
-  // Set item details in the modal
+
   document.getElementById('transactionItemId').value = item._id;
   document.getElementById('transactionItemName').textContent = item.name;
   document.getElementById('transactionItemCategory').textContent = item.category;
@@ -4017,12 +3870,12 @@ function openTransactionDialog(item) {
   document.getElementById('transactionItemQuantity').textContent = item.quantity;
   document.getElementById('transactionItemUnit').textContent = item.unit;
   
-  // Set default quantity
+
   const quantityInput = document.getElementById('transactionQuantity');
   const availableQuantity = item.availableQuantity !== undefined ? 
     item.availableQuantity : item.quantity;
   
-  // Set the maximum quantity based on what's available
+
   quantityInput.max = availableQuantity;
   quantityInput.value = 1; // Default to 1
   
@@ -4034,9 +3887,7 @@ function openTransactionDialog(item) {
   modal.show();
 }
 
-/**
- * Populates transaction type dropdown based on item category and status
- */
+
 function populateTransactionTypes(item) {
   const transactionTypeSelect = document.getElementById('transactionType');
   if (!transactionTypeSelect) return;
@@ -4052,7 +3903,7 @@ function populateTransactionTypes(item) {
   // Default transaction options
   const options = [];
   
-  // Add transaction types based on item category
+
   if (category === 'Consumable') {
     // Consumable options
     options.push({ value: 'Stock Addition', label: 'Add Stock' });
@@ -4111,10 +3962,6 @@ function populateTransactionTypes(item) {
 }
 
 
-
-/**
- * Updates quantity input limits based on transaction type
- */
 function updateQuantityLimits(transactionType) {
   const quantityInput = document.getElementById('transactionQuantity');
   if (!quantityInput) return;
@@ -4122,7 +3969,6 @@ function updateQuantityLimits(transactionType) {
   const itemId = document.getElementById('transactionItemId').value;
   if (!itemId) return;
   
-  // Fetch current item data
   fetchWithAuth(`${API_URL}/items/${itemId}`)
     .then(response => {
       if (!response.ok) throw new Error('Failed to fetch item');
@@ -4131,7 +3977,7 @@ function updateQuantityLimits(transactionType) {
     .then(item => {
       let maxQuantity = 1;
       
-      // Set maximum quantity based on transaction type
+
       switch (transactionType) {
         case 'Stock Addition':
           // No real limit for adding stock
@@ -4167,12 +4013,12 @@ function updateQuantityLimits(transactionType) {
       // Update the input field
       quantityInput.max = maxQuantity;
       
-      // If current value exceeds max, adjust it
+  
       if (parseInt(quantityInput.value) > maxQuantity) {
         quantityInput.value = maxQuantity;
       }
       
-      // Ensure minimum of 1
+   
       if (parseInt(quantityInput.value) < 1) {
         quantityInput.value = 1;
       }
@@ -4182,9 +4028,7 @@ function updateQuantityLimits(transactionType) {
     });
 }
 
-/**
- * Loads locations for transaction form dropdowns
- */
+
 function loadLocationsForTransactionForm() {
   fetchWithAuth(`${API_URL}/locations/hierarchy`)
     .then(response => {
@@ -4192,20 +4036,20 @@ function loadLocationsForTransactionForm() {
       return response.json();
     })
     .then(locations => {
-      // Populate location dropdowns
+  
       const fromLocationSelect = document.getElementById('transactionFromLocation');
       const toLocationSelect = document.getElementById('transactionToLocation');
       
-      // Clear existing options
+   
       fromLocationSelect.innerHTML = '<option value="">Select Location</option>';
       toLocationSelect.innerHTML = '<option value="">Select Location</option>';
       
-      // Add options for each room
+
       locations.forEach(room => {
         fromLocationSelect.innerHTML += `<option value="${room._id}">${room.name}</option>`;
         toLocationSelect.innerHTML += `<option value="${room._id}">${room.name}</option>`;
         
-        // Add options for each rack if populated as a hierarchy
+ 
         if (room.racks && room.racks.length > 0) {
           room.racks.forEach(rack => {
             fromLocationSelect.innerHTML += `<option value="${rack._id}">&nbsp;&nbsp;└ ${rack.name}</option>`;
@@ -4221,13 +4065,13 @@ function loadLocationsForTransactionForm() {
 
 
 
-// Replace the existing broken transaction button handler with this new implementation
+
 function setupImprovedTransactionButtons() {
   console.log('Setting up improved transaction buttons');
   
-  // Add a global click handler that will work for dynamically added buttons
+
   document.addEventListener('click', function(e) {
-    // Find if the click was on a transaction button or its child elements
+
     const transactionBtn = e.target.closest('.transaction-btn');
     
     if (transactionBtn) {
@@ -4240,7 +4084,7 @@ function setupImprovedTransactionButtons() {
         return;
       }
       
-      // Fetch the item data and open the transaction dialog
+ 
       fetchWithAuth(`${API_URL}/items/${itemId}`)
         .then(response => {
           if (!response.ok) throw new Error('Failed to fetch item');
@@ -4258,20 +4102,20 @@ function setupImprovedTransactionButtons() {
 }
 
 
-// Add this to your inventory.js file
+
 function replaceTransactionButtons() {
   document.querySelectorAll('.transaction-btn').forEach(btn => {
     const itemId = btn.dataset.id;
     const itemName = btn.dataset.name;
     
-    // Create a new link element with the same styling
+ 
     const link = document.createElement('a');
     link.href = `transaction.html?id=${itemId}`;
     link.className = btn.className.replace('transaction-btn', 'transaction-link');
     link.innerHTML = '<i class="fas fa-exchange-alt"></i>';
     link.title = `Create Transaction for ${itemName}`;
     
-    // Replace the button with the link
+
     btn.parentNode.replaceChild(link, btn);
   });
 }
@@ -4280,7 +4124,7 @@ function replaceTransactionButtons() {
 
 
 
-// Add this to inventory.js for testing
+
 function testAuthConnection() {
   fetchWithAuth(`${API_URL}/items`)
     .then(response => {
@@ -4288,7 +4132,7 @@ function testAuthConnection() {
         console.log('Authentication is working');
       } else {
         console.log('Authentication failed - you may need to log in again');
-        // Redirect to login if auth fails
+   
         if (response && response.status === 401) {
           logout();
         }
@@ -4307,7 +4151,7 @@ function testAuthConnection() {
 
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Check if user is logged in
+ 
   const token = getAuthToken();
   const user = getCurrentUser();
   
@@ -4317,11 +4161,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
     addModalFixStyles();
-    // setupTransactionButtons();
-    // fixTransactionModal();
-    setupEnhancedTransactions();
-  
-  // Setup event listeners
+   
   setupEventListeners();
 
   setupBarcodeEventListeners();
@@ -4329,21 +4169,21 @@ document.addEventListener('DOMContentLoaded', () => {
   setupBarcodeChangeListeners();
 
 
-  // Fix modal accessibility issues
+
   fixModalAccessibilityIssues();
 
     
-  // Fix transaction modal issues
-  // fixTransactionModal();
+
+
   
-  // Make sure Save Item button has event listener attached
+
   const saveItemBtn = document.getElementById('saveItemBtn');
   if (saveItemBtn) {
-    // Remove any existing event listeners to avoid duplicates
+ 
     const newSaveBtn = saveItemBtn.cloneNode(true);
     saveItemBtn.parentNode.replaceChild(newSaveBtn, saveItemBtn);
     
-    // Add new event listener
+   
     newSaveBtn.addEventListener('click', function(e) {
       e.preventDefault();
       console.log('Save button clicked');
@@ -4351,8 +4191,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  
-  // Show/hide manager/admin features based on user role
+
   if (isInventoryManager()) {
     document.querySelectorAll('.manager-only').forEach(el => el.classList.remove('d-none'));
   }
@@ -4361,20 +4200,19 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('d-none'));
   }
   
-  // Update user info
+
   document.getElementById('userName').textContent = user.name;
   document.getElementById('profileName').value = user.name;
   document.getElementById('profileEmail').value = user.email;
   document.getElementById('profileRole').value = user.role;
   
-  // Initialize the inventory
+
   initializeInventory();
   
-  // Load locations and suppliers for the form
+
   loadLocationsAndSuppliers();
 
 
-  // Auto-focus the barcode lookup field
   const quickBarcodeSearch = document.getElementById('quickBarcodeSearch');
   if (quickBarcodeSearch) {
     setTimeout(() => {
@@ -4382,7 +4220,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 500);
   }
   
-  // Look for the 'addItem' hash fragment to automatically open Add Item modal
+
   if (window.location.hash === '#addItem') {
     document.getElementById('addItemBtn').click();
   }
@@ -4390,22 +4228,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   function fixModalAccessibilityIssues() {
-    // When any modal is hidden, properly clean up ARIA attributes
+    
     document.body.addEventListener('hidden.bs.modal', function(event) {
-      // Reset focus to body
+  
       document.body.focus();
       
-      // Remove aria-hidden from all elements
+
       document.querySelectorAll('[aria-hidden="true"]').forEach(el => {
         el.removeAttribute('aria-hidden');
       });
       
-      // Clear any remaining modal-related classes and styles
+  
       document.body.classList.remove('modal-open');
       document.body.style.overflow = '';
       document.body.style.paddingRight = '';
       
-      // Remove any leftover backdrops
+  
       document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
         backdrop.remove();
       });
@@ -4413,11 +4251,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
 
-    // Add this line to your existing DOMContentLoaded handler
-    setupImprovedTransactionButtons();
 
-      setupImageHandling();
-       // Test authentication
+   
+
+  
+   
   testAuthConnection();
 
 });

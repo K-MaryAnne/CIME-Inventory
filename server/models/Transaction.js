@@ -8,10 +8,10 @@ const TransactionSchema = new mongoose.Schema({
     required: true
   },
   type: {
-    type: String,  // Add this line - it was missing
+    type: String,  
     enum: [
       // Standard inventory transactions
-      'Stock Addition',      // Adding new stock
+      'Stock Addition',     
       'Stock Removal',       // Removing stock permanently
       
       // Location transactions
@@ -29,7 +29,7 @@ const TransactionSchema = new mongoose.Schema({
       'Send to Maintenance', // Start maintenance
       'Return from Maintenance', // End maintenance
       
-      // Legacy types for backward compatibility
+ 
       'Check-in',
       'Check-out',
       'Maintenance',
@@ -41,7 +41,7 @@ const TransactionSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
-  // Rest of the schema remains the same
+
   fromLocation: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Location'
@@ -50,19 +50,19 @@ const TransactionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Location'
   },
-  // For session-related transactions
+
   session: {
     name: String,
     location: String
   },
   
-  // For rental-related transactions
+
   rental: {
     rentedTo: String,
     expectedReturnDate: Date
   },
   
-  // For maintenance-related transactions
+
   maintenance: {
     provider: String,
     expectedEndDate: Date

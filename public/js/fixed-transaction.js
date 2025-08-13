@@ -1,20 +1,20 @@
-// fixed-transaction.js - Simple, reliable transaction handling
+
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Loading fixed transaction handler');
     
-    // Give the page a moment to fully load
+ 
     setTimeout(function() {
-      // Replace all transaction buttons with new ones that work reliably
+    
       replaceAllTransactionButtons();
     }, 500);
     
-    // Function to replace all transaction buttons with reliable ones
+   
     function replaceAllTransactionButtons() {
       console.log('Replacing all transaction buttons');
       
       document.querySelectorAll('.transaction-btn').forEach(function(btn) {
-        // Get the item data from the button
+       
         const itemId = btn.dataset.id;
         const itemName = btn.dataset.name;
         
@@ -23,29 +23,28 @@ document.addEventListener('DOMContentLoaded', function() {
           return;
         }
         
-        // Create a new button with the same appearance
+        
         const newBtn = btn.cloneNode(true);
         
-        // Replace the old button with the new one
+      
         btn.parentNode.replaceChild(newBtn, btn);
         
-        // Add a direct click handler
+       
         newBtn.addEventListener('click', function(e) {
           e.preventDefault();
           e.stopPropagation();
           console.log('Transaction button clicked for item:', itemId);
           
-          // Show loading state
           showAlert('Loading transaction form...', 'info');
           
-          // Fetch the item data
+        
           fetchWithAuth(`${API_URL}/items/${itemId}`)
             .then(response => {
               if (!response.ok) throw new Error('Failed to fetch item data');
               return response.json();
             })
             .then(item => {
-              // Create and show the modal with direct DOM manipulation
+            
               openSimpleTransactionModal(item);
             })
             .catch(error => {
@@ -56,61 +55,58 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
     
-    // Function to open a simple transaction modal
+
     function openSimpleTransactionModal(item) {
       console.log('Opening simple transaction modal for', item.name);
-      
-      // First, create the modal if it doesn't exist
+     
       if (!document.getElementById('simpleTransactionModal')) {
-        // Wait for modal creation to complete before continuing
+
         return createSimpleTransactionModal().then(() => {
-          // Now continue with setting values
+          
           continueWithModalSetup();
         });
       }
 
-      // Modal already exists, proceed directly
 continueWithModalSetup();
 
-// This function contains the rest of the original function code
 function continueWithModalSetup() {
       
-      // Get the modal element
+      
       const modal = document.getElementById('simpleTransactionModal');
       
-      // Clean up any existing modals
+     
       document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
       document.body.classList.remove('modal-open');
       document.body.style.overflow = '';
       document.body.style.paddingRight = '';
       
-      // Set the item data in the modal
+ 
       document.getElementById('simple-item-id').value = item._id;
       document.getElementById('simple-item-name').textContent = item.name;
       document.getElementById('simple-item-category').textContent = item.category;
       document.getElementById('simple-item-quantity').textContent = 
         `Quantity: ${item.quantity} ${item.unit} (${item.availableQuantity || item.quantity} available)`;
       
-      // Add appropriate transaction types based on category
+   
       populateTransactionTypes(item);
       
-      // Directly manipulate the DOM to show the modal
+     
       document.body.classList.add('modal-open');
       document.body.style.overflow = 'hidden';
       document.body.style.paddingRight = '15px';
       
-      // Create a backdrop
+      
       const backdrop = document.createElement('div');
       backdrop.className = 'modal-backdrop fade show';
       document.body.appendChild(backdrop);
       
-      // Show the modal
+     
       modal.classList.add('show');
       modal.style.display = 'block';
       modal.setAttribute('aria-modal', 'true');
       modal.removeAttribute('aria-hidden');
       
-      // Focus the first input
+
       setTimeout(function() {
         const transactionType = document.getElementById('simple-transaction-type');
         if (transactionType) {
@@ -120,7 +116,7 @@ function continueWithModalSetup() {
     }
     }
     
-    // Function to create the modal if it doesn't exist
+ 
     function createSimpleTransactionModal() {
       console.log('Creating simple transaction modal');
       
@@ -195,12 +191,12 @@ function continueWithModalSetup() {
         </div>
       `;
       
-      // Create container and add to document
+
       const container = document.createElement('div');
       container.innerHTML = modalHTML;
       document.body.appendChild(container.firstChild);
       
-      // Add the close function to window
+
       window.closeSimpleModal = function() {
         const modal = document.getElementById('simpleTransactionModal');
         if (modal) {
@@ -210,28 +206,26 @@ function continueWithModalSetup() {
           modal.setAttribute('aria-hidden', 'true');
         }
         
-        // Remove backdrop
+  
         document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
         
-        // Reset body
+   
         document.body.classList.remove('modal-open');
         document.body.style.overflow = '';
         document.body.style.paddingRight = '';
       };
-      
-      // Add the update fields function
+   
       window.updateTransactionFields = function() {
         const transactionType = document.getElementById('simple-transaction-type').value;
         const locationFields = document.getElementById('location-fields');
         const fromLocationGroup = document.getElementById('from-location-group');
         const toLocationGroup = document.getElementById('to-location-group');
         
-        // Hide all first
         locationFields.style.display = 'none';
         fromLocationGroup.style.display = 'none';
         toLocationGroup.style.display = 'none';
         
-        // Show relevant fields based on transaction type
+  
         if (transactionType) {
           switch (transactionType) {
             case 'Stock Addition':
@@ -250,14 +244,14 @@ function continueWithModalSetup() {
               toLocationGroup.style.display = 'block';
               break;
               
-            // Add more cases for other transaction types
+         
           }
         }
       };
       
-      // Add save transaction function
+   
       window.saveSimpleTransaction = function() {
-        // Get form values
+
         const itemId = document.getElementById('simple-item-id').value;
         const transactionType = document.getElementById('simple-transaction-type').value;
         const quantity = parseInt(document.getElementById('simple-transaction-quantity').value);

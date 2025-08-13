@@ -147,7 +147,7 @@ function renderSuppliers() {
   
   tableBody.innerHTML = html;
   
-  // Add event listeners to action buttons
+ 
   document.querySelectorAll('.view-items-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       viewSupplierItems(btn.dataset.id, btn.dataset.name);
@@ -169,7 +169,7 @@ function renderSuppliers() {
   });
 }
 
-// Filter suppliers by search term
+
 function filterSuppliers(searchTerm) {
   if (!searchTerm) {
     filteredSuppliers = [...suppliers];
@@ -277,7 +277,7 @@ async function viewSupplierItems(supplierId, supplierName) {
   }
 }
 
-// Open supplier modal for editing
+
 function editSupplier(supplierId) {
   const modal = document.getElementById('supplierModal');
   const modalTitle = document.getElementById('supplierModalTitle');
@@ -286,7 +286,7 @@ function editSupplier(supplierId) {
   // Reset form
   form.reset();
   
-  // Find supplier in the array
+
   const supplier = suppliers.find(s => s._id === supplierId);
   
   if (supplier) {

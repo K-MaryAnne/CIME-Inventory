@@ -50,7 +50,7 @@ const createLocation = async (req, res) => {
   try {
     const { name, type, parent, description } = req.body;
     
-    // Validate parent if provided
+   
     if (parent) {
       const parentLocation = await Location.findById(parent);
       if (!parentLocation) {

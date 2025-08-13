@@ -1,27 +1,26 @@
 // public/js/main.js
 
-// API URL (change this to your actual server URL in production)
+
 const API_URL = 'http://localhost:5000/api';
 
-// DOM elements
+
 const loginForm = document.getElementById('loginForm');
 const loginAlert = document.getElementById('loginAlert');
 const togglePasswordBtn = document.getElementById('togglePassword');
 
-// Check if user is already logged in
 document.addEventListener('DOMContentLoaded', () => {
-    // Check if we're on the login page
+  
     const loginForm = document.getElementById('loginForm');
     const togglePasswordBtn = document.getElementById('togglePassword');
     
     if (loginForm) {
-      // If user is already logged in, redirect to dashboard
+     
       const token = localStorage.getItem('token');
       if (token) {
         window.location.href = 'pages/dashboard.html';
       }
       
-      // Toggle password visibility if the button exists
+     
       if (togglePasswordBtn) {
         togglePasswordBtn.addEventListener('click', () => {
           const passwordInput = document.getElementById('password');
@@ -39,11 +38,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
       
-      // Update for the new login process
-      // This is now handled by auth.js, so we don't need the old code
+     
     }
   });
-// Utility functions
+
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A';
   
@@ -65,7 +63,7 @@ const showAlert = (message, type = 'success', container = 'alertContainer', auto
   const alertContainer = document.getElementById(container);
   if (!alertContainer) return;
   
-  // Create alert element
+  
   const alertDiv = document.createElement('div');
   alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
   alertDiv.innerHTML = `
@@ -73,11 +71,11 @@ const showAlert = (message, type = 'success', container = 'alertContainer', auto
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
   `;
   
-  // Add to container
+  
   alertContainer.innerHTML = '';
   alertContainer.appendChild(alertDiv);
   
-  // Auto close after 5 seconds
+ 
   if (autoClose) {
     setTimeout(() => {
       alertDiv.classList.remove('show');
@@ -101,7 +99,7 @@ const getStatusBadgeClass = (status) => {
   }
 };
 
-// Authentication helper functions
+
 const getAuthToken = () => localStorage.getItem('token');
 
 const getCurrentUser = () => {
@@ -125,17 +123,17 @@ const logout = () => {
   window.location.href = '../index.html';
 };
 
-// API helper functions
+
 const fetchWithAuth = async (url, options = {}) => {
     const token = getAuthToken();
     
     if (!token) {
-      // Redirect to login if no token
+    
       window.location.href = '../index.html';
       return null;
     }
     
-    // Add authorization header
+    
     const headers = {
       ...options.headers || {},
       'Authorization': `Bearer ${token}`
@@ -147,7 +145,7 @@ const fetchWithAuth = async (url, options = {}) => {
         headers
       });
       
-      // If unauthorized, redirect to login
+     
       if (response.status === 401) {
         logout();
         return null;
@@ -156,7 +154,7 @@ const fetchWithAuth = async (url, options = {}) => {
       return response;
     } catch (error) {
       console.error('API request failed:', error);
-      // Return a custom error response instead of throwing
+     
       return {
         ok: false,
         json: async () => ({ message: 'Network error: Failed to connect to server' })
@@ -164,7 +162,7 @@ const fetchWithAuth = async (url, options = {}) => {
     }
   };
 
-// Pagination helper
+
 const createPagination = (currentPage, totalPages, onPageChange) => {
   const paginationEl = document.createElement('nav');
   paginationEl.setAttribute('aria-label', 'Page navigation');
@@ -172,7 +170,7 @@ const createPagination = (currentPage, totalPages, onPageChange) => {
   const ul = document.createElement('ul');
   ul.className = 'pagination justify-content-center';
   
-  // Previous button
+ 
   const prevLi = document.createElement('li');
   prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
   
@@ -190,7 +188,7 @@ const createPagination = (currentPage, totalPages, onPageChange) => {
   prevLi.appendChild(prevLink);
   ul.appendChild(prevLi);
   
-  // Page numbers
+
   const startPage = Math.max(1, currentPage - 2);
   const endPage = Math.min(totalPages, startPage + 4);
   
@@ -211,7 +209,7 @@ const createPagination = (currentPage, totalPages, onPageChange) => {
     ul.appendChild(li);
   }
   
-  // Next button
+ 
   const nextLi = document.createElement('li');
   nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
   
@@ -236,68 +234,67 @@ const createPagination = (currentPage, totalPages, onPageChange) => {
 
 
 /**
- * Enhanced modal closing function to solve ARIA and focus issues
- * @param {HTMLElement} modalElement - The modal DOM element
+ * @param {HTMLElement} modalElement 
  */
 function enhancedModalClose(modalElement) {
   if (!modalElement) return;
   
   try {
-    // 1. Find and blur any focused elements BEFORE closing the modal
+   
     const focusedElement = modalElement.querySelector(':focus');
     if (focusedElement) {
       focusedElement.blur();
-      // Move focus to the body
+     
       document.body.focus();
     }
     
-    // 2. Get the Bootstrap modal instance
+  
     const modalInstance = bootstrap.Modal.getInstance(modalElement);
     if (!modalInstance) return;
     
-    // 3. Remove event listeners to prevent Bootstrap from adding aria-hidden back
+  
     const modalCloseHandler = function(event) {
-      // Prevent default behavior that adds aria-hidden
+    
       event.preventDefault();
       
-      // Remove aria-hidden attribute
+     
       modalElement.removeAttribute('aria-hidden');
       
-      // Clean up modal-related classes and styles
+     
       document.body.classList.remove('modal-open');
       document.body.style.overflow = '';
       document.body.style.paddingRight = '';
       
-      // Make sure display style is set to none
+     
       modalElement.style.display = 'none';
       
-      // Remove any leftover backdrops
+     
       document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
         backdrop.remove();
       });
     };
     
-    // One-time event listener that will clean up after modal is hidden
+   
     modalElement.addEventListener('hidden.bs.modal', modalCloseHandler, { once: true });
     
-    // 4. Close the modal
+    
     modalInstance.hide();
     
-    // 5. For extra safety, manually clean up after animation finishes
+   
     setTimeout(() => {
-      // Double-check that aria-hidden is removed
+    
       modalElement.removeAttribute('aria-hidden');
       
-      // Verify backdrop is removed
+   
       document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
         backdrop.remove();
       });
       
-      // Ensure body styles are reset
+      
       document.body.classList.remove('modal-open');
       document.body.style.overflow = '';
       document.body.style.paddingRight = '';
-    }, 350); // Bootstrap modal transition is usually 300ms
+    }, 350); 
     
   } catch (error) {
     console.error('Error in enhancedModalClose:', error);
@@ -314,31 +311,27 @@ function enhancedModalClose(modalElement) {
 
 
 
-/**
- * Fix Bootstrap modal ARIA issues
- */
+
 function patchBootstrapModals() {
-  // Only run if Bootstrap is available
+
   if (typeof bootstrap === 'undefined' || !bootstrap.Modal) {
     console.warn('Bootstrap not loaded, cannot patch modals');
     return;
   }
 
-  // Create a MutationObserver to detect changes to aria-hidden
   const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
       if (mutation.attributeName === 'aria-hidden' && 
           mutation.target.classList.contains('modal') &&
           mutation.target.getAttribute('aria-hidden') === 'true') {
         
-        // Check if any element inside has focus
+     
         const focusedElement = mutation.target.querySelector(':focus');
         if (focusedElement) {
-          // Clear focus to prevent ARIA conflicts
+       
           focusedElement.blur();
           document.body.focus();
-          
-          // Remove the problematic aria-hidden attribute
+        
           setTimeout(() => {
             mutation.target.removeAttribute('aria-hidden');
           }, 0);
@@ -347,12 +340,12 @@ function patchBootstrapModals() {
     });
   });
 
-  // Start observing all modals for aria-hidden changes
+
   document.querySelectorAll('.modal').forEach(modal => {
     observer.observe(modal, { attributes: true });
   });
 
-  // Add observer to new modals that might be dynamically added
+
   const bodyObserver = new MutationObserver((mutations) => {
     mutations.forEach(mutation => {
       if (mutation.addedNodes) {
@@ -365,32 +358,32 @@ function patchBootstrapModals() {
     });
   });
 
-  // Observe the body for new modals
+
   bodyObserver.observe(document.body, { 
     childList: true, 
     subtree: true 
   });
 
-  // Override the hide method of Bootstrap modals
+
   const originalHide = bootstrap.Modal.prototype.hide;
   bootstrap.Modal.prototype.hide = function() {
-    // Find the modal element
+ 
     const modalElement = this._element;
     
-    // Remove focus from elements inside the modal
+  
     const focusedElement = modalElement.querySelector(':focus');
     if (focusedElement) {
       focusedElement.blur();
       document.body.focus();
     }
     
-    // Remove aria-hidden before hiding
+  
     modalElement.removeAttribute('aria-hidden');
     
-    // Call the original method
+  
     originalHide.call(this);
     
-    // Ensure cleanup happens after animation
+   
     setTimeout(() => {
       modalElement.removeAttribute('aria-hidden');
       modalElement.style.display = 'none';
@@ -399,51 +392,49 @@ function patchBootstrapModals() {
 }
 
 
-// HEREEEE!
+
 
 function generateScannerFriendlyBarcode() {
-  // Use Code-128 format which is highly reliable and widely supported
-  // Stick to numeric values for maximum compatibility
-  const prefix = '1000'; // Simple numeric prefix
-  const timestamp = Date.now().toString().substring(7); // Last 6 digits of timestamp
+ 
+  const prefix = '1000'; 
+  const timestamp = Date.now().toString().substring(7); 
   const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
   
-  // Combine to create a numeric barcode that's easier for scanners to read
+
   return `${prefix}${timestamp}${random}`;
 }
 
 
-// Update the JsBarcode configuration
+
 function renderBarcode(canvas, barcodeValue) {
   JsBarcode(canvas, barcodeValue, {
-    format: "CODE128",  // Industry standard format
+    format: "CODE128",  
     lineColor: "#000",
     width: 2,
-    height: 60,         // Taller bars for better scanning
-    displayValue: true, // Show the value below the barcode
-    fontSize: 14,       // Larger text
-    margin: 10,         // More whitespace around barcode
-    textMargin: 6       // Space between barcode and text
+    height: 60,         
+    displayValue: true, 
+    fontSize: 14,
+    margin: 10,         
+    textMargin: 6       
   });
 }
 
-///TO HEEERRRE
+
 
 
 function setupImprovedModalHandling() {
-  // Fix for modal focus issues
+
   document.addEventListener('hidden.bs.modal', function(event) {
-    // Get the modal that was just hidden
+ 
     const modal = event.target;
-    
-    // Find any elements that might still have focus inside
+ 
     const focusedElement = modal.querySelector(':focus');
     if (focusedElement) {
-      // Force blur on any focused elements
+    
       focusedElement.blur();
     }
     
-    // Remove aria-hidden after a short delay
+  
     setTimeout(() => {
       modal.removeAttribute('aria-hidden');
       
@@ -452,16 +443,15 @@ function setupImprovedModalHandling() {
       document.body.style.overflow = '';
       document.body.style.paddingRight = '';
       
-      // Clean up any stray backdrops
+   
       document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
         backdrop.remove();
       });
     }, 50);
   });
   
-  // Also fix modal opening to set proper focus management
   document.addEventListener('shown.bs.modal', function(event) {
-    // Find the first focusable element and focus it
+   
     const modal = event.target;
     const focusable = modal.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
     
@@ -476,13 +466,8 @@ function setupImprovedModalHandling() {
 
 
 
-
-  
-  // Consolidated initialization when document is loaded
 document.addEventListener('DOMContentLoaded', function() {
-  // Call all setup functions in one place
-  // setupModalBackdropFix();
-  // fixModalFocusIssues();
+
   setupImprovedModalHandling();
   patchBootstrapModals();
   

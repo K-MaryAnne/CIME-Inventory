@@ -10,7 +10,7 @@ let allLocations = {
 let expandedState = false;
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Check if user is logged in
+
   const token = getAuthToken();
   const user = getCurrentUser();
   
@@ -19,10 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
   
-  // Setup event listeners
+
   setupEventListeners();
   
-  // Show/hide manager/admin features based on user role
+
   if (isInventoryManager()) {
     document.querySelectorAll('.manager-only').forEach(el => el.classList.remove('d-none'));
   }
@@ -31,23 +31,23 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('d-none'));
   }
   
-  // Update user info
+  
   document.getElementById('userName').textContent = user.name;
   document.getElementById('profileName').value = user.name;
   document.getElementById('profileEmail').value = user.email;
   document.getElementById('profileRole').value = user.role;
   
-  // Load locations
+ 
   loadLocations();
   
-  // Load location statistics
+
   loadLocationStatistics();
 });
 
-// Load locations from API
+
 async function loadLocations() {
   try {
-    // Fetch location hierarchy
+    
     const response = await fetchWithAuth(`${API_URL}/locations/hierarchy`);
     
     if (!response) return;
@@ -55,13 +55,13 @@ async function loadLocations() {
     if (response.ok) {
       locationHierarchy = await response.json();
       
-      // Process locations for easier access
+    
       processLocations();
       
-      // Update counters
+    
       updateLocationCounters();
       
-      // Render location tree
+   
       renderLocationTree();
     } else {
       const errorData = await response.json();
@@ -79,7 +79,7 @@ async function loadLocations() {
     console.error('Location loading error:', error);
     showAlert('Failed to connect to server. Please try again.', 'danger');
     
-    // Show error in location tree
+
     document.getElementById('locationTree').innerHTML = `
       <div class="text-center py-4">
         <i class="fas fa-exclamation-circle fa-3x mb-3 text-danger"></i>
@@ -89,7 +89,7 @@ async function loadLocations() {
   }
 }
 
-// Process locations for easier access
+
 function processLocations() {
   // Reset
   allLocations = {

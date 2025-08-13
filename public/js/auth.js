@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (!progressBar || !feedback) return false;
     
-    // Default - empty password
+    // Default empty password
     let strength = 0;
     let message = 'Password must be at least 8 characters long.';
     let color = '#e9ecef';
@@ -338,7 +338,7 @@ async function handleRegister() {
       
       console.log('Sending registration request to:', `${API_URL}/users/register`);
       
-      // Send registration request - FIXED URL to use the public registration endpoint
+      // Send registration request 
       const response = await fetch(`${API_URL}/users/register`, {
         method: 'POST',
         headers: {
@@ -393,7 +393,7 @@ async function handleRegister() {
     }
   }
   
-  // Show alert message - renamed to avoid conflict with main.js
+  // Show alert message 
   function showAlertMessage(message, type = 'success') {
     const alertContainer = document.getElementById('alertContainer');
     if (!alertContainer) return;
@@ -406,11 +406,11 @@ async function handleRegister() {
       <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     `;
     
-    // Add to container
+    
     alertContainer.innerHTML = '';
     alertContainer.appendChild(alertDiv);
     
-    // Auto close after 5 seconds
+    
     setTimeout(() => {
       alertDiv.classList.remove('show');
       setTimeout(() => alertDiv.remove(), 300);

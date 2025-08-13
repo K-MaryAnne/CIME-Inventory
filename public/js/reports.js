@@ -882,7 +882,7 @@ function updateDueForMaintenanceTable(items) {
   
   tableBody.innerHTML = html;
   
-  // Add event listeners to maintenance buttons
+
   document.querySelectorAll('.maintenance-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       sendToMaintenance(btn.dataset.id, btn.dataset.name);
@@ -890,8 +890,7 @@ function updateDueForMaintenanceTable(items) {
   });
 }
 
-// Update maintenance history table
-// ----- LOCATION REPORT -----
+
 
 // Load location usage report
 async function loadLocationReport() {
@@ -949,11 +948,11 @@ async function loadLocationReport() {
   }
 }
 
-// Create location usage chart
+
 function createLocationUsageChart(data) {
   const ctx = document.getElementById('locationUsageChart').getContext('2d');
   
-  // Destroy existing chart if it exists
+
   if (locationChartInstance) {
     locationChartInstance.destroy();
   }
@@ -1034,7 +1033,7 @@ function createLocationUsageChart(data) {
   });
 }
 
-// Update location usage table
+
 function updateLocationUsageTable(data) {
   const tableBody = document.getElementById('locationUsageTable');
   
@@ -1092,9 +1091,8 @@ function updateLocationUsageTable(data) {
   tableBody.innerHTML = html;
 }
 
-// Export current report
 function exportCurrentReport() {
-  // Determine which tab is active
+
   const activeTab = document.querySelector('.tab-pane.active');
   const tabId = activeTab.id;
   
@@ -1123,19 +1121,19 @@ function exportInventoryReport() {
     const table = document.querySelector('#inventory table');
     const rows = table.querySelectorAll('tbody tr');
     
-    // Create CSV content
+ 
     let csvContent = 'data:text/csv;charset=utf-8,';
     
-    // Add headers
+  
     const headers = ['Item Name', 'Category', 'Quantity', 'Unit Cost', 'Total Value', 'Status', 'Location'];
     csvContent += headers.join(',') + '\n';
     
-    // Add rows
+   
     rows.forEach(row => {
       const cells = row.querySelectorAll('td');
-      if (cells.length <= 1) return; // Skip "no items found" row
+      if (cells.length <= 1) return; 
       
-      // Extract text content from cells (clean up to remove HTML)
+    
       const itemName = cells[0].textContent.trim().replace(/\s+/g, ' ').split('No S/N')[0].trim();
       const category = cells[1].textContent.trim();
       const quantity = cells[2].textContent.trim().split('Low')[0].trim();
@@ -1157,17 +1155,17 @@ function exportInventoryReport() {
       csvContent += rowData.join(',') + '\n';
     });
     
-    // Create download link
+
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
     link.setAttribute('download', `inventory_report_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     
-    // Trigger download
+  
     link.click();
     
-    // Clean up
+    
     document.body.removeChild(link);
   } catch (error) {
     console.error('Export error:', error);
@@ -1175,7 +1173,7 @@ function exportInventoryReport() {
   }
 }
 
-// Export transactions report to CSV
+
 function exportTransactionsReport() {
   try {
     // Get table data
@@ -1185,16 +1183,16 @@ function exportTransactionsReport() {
     // Create CSV content
     let csvContent = 'data:text/csv;charset=utf-8,';
     
-    // Add headers
+  
     const headers = ['Date & Time', 'Item', 'Type', 'Quantity', 'Location', 'Performed By', 'Notes'];
     csvContent += headers.join(',') + '\n';
     
-    // Add rows
+   
     rows.forEach(row => {
       const cells = row.querySelectorAll('td');
-      if (cells.length <= 1) return; // Skip "no transactions found" row
+      if (cells.length <= 1) return; 
       
-      // Extract text content from cells (clean up to remove HTML)
+    
       const dateTime = cells[0].textContent.trim();
       const item = cells[1].textContent.trim().replace(/\s+/g, ' ');
       const type = cells[2].textContent.trim();
@@ -1216,7 +1214,7 @@ function exportTransactionsReport() {
       csvContent += rowData.join(',') + '\n';
     });
     
-    // Create download link
+ 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
@@ -1237,23 +1235,23 @@ function exportTransactionsReport() {
 // Export maintenance report to CSV
 function exportMaintenanceReport() {
   try {
-    // Get table data
+    
     const underMaintenanceTable = document.querySelector('#underMaintenanceTable');
     const dueForMaintenanceTable = document.querySelector('#dueForMaintenanceTable');
     
-    // Create CSV content
+    
     let csvContent = 'data:text/csv;charset=utf-8,';
     
-    // Add headers and data for items under maintenance
+   
     csvContent += 'ITEMS UNDER MAINTENANCE\n';
     csvContent += 'Item Name,Category,Serial Number,Last Maintenance,Location\n';
     
-    // Add under maintenance rows
+   
     underMaintenanceTable.querySelectorAll('tr').forEach(row => {
       const cells = row.querySelectorAll('td');
-      if (cells.length <= 1) return; // Skip "no items found" row
+      if (cells.length <= 1) return; 
       
-      // Extract text content from cells
+     
       const itemName = cells[0].textContent.trim().replace(/\s+/g, ' ');
       const category = cells[1].textContent.trim();
       const serialNumber = cells[2].textContent.trim();
@@ -1271,16 +1269,16 @@ function exportMaintenanceReport() {
       csvContent += rowData.join(',') + '\n';
     });
     
-    // Add headers and data for items due for maintenance
+   
     csvContent += '\nITEMS DUE FOR MAINTENANCE\n';
     csvContent += 'Item Name,Category,Next Maintenance,Days Left,Current Status\n';
     
-    // Add due for maintenance rows
+   
     dueForMaintenanceTable.querySelectorAll('tr').forEach(row => {
       const cells = row.querySelectorAll('td');
-      if (cells.length <= 1) return; // Skip "no items found" row
+      if (cells.length <= 1) return; 
       
-      // Extract text content from cells
+   
       const itemName = cells[0].textContent.trim().replace(/\s+/g, ' ');
       const category = cells[1].textContent.trim();
       const nextMaintenance = cells[2].textContent.trim();
@@ -1305,10 +1303,10 @@ function exportMaintenanceReport() {
     link.setAttribute('download', `maintenance_report_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     
-    // Trigger download
+   
     link.click();
     
-    // Clean up
+    
     document.body.removeChild(link);
   } catch (error) {
     console.error('Export error:', error);
@@ -1333,9 +1331,9 @@ function exportLocationReport() {
     // Add rows
     rows.forEach(row => {
       const cells = row.querySelectorAll('td');
-      if (cells.length <= 1) return; // Skip "no rooms found" row
+      if (cells.length <= 1) return;
       
-      // Extract text content from cells
+   
       const room = cells[0].textContent.trim().replace(/\s+/g, ' ');
       const itemsCount = cells[1].textContent.trim();
       const categories = cells[2].textContent.trim();
@@ -1351,17 +1349,17 @@ function exportLocationReport() {
       csvContent += rowData.join(',') + '\n';
     });
     
-    // Create download link
+   
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
     link.setAttribute('download', `location_report_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     
-    // Trigger download
+
     link.click();
     
-    // Clean up
+  
     document.body.removeChild(link);
   } catch (error) {
     console.error('Export error:', error);
@@ -1369,47 +1367,46 @@ function exportLocationReport() {
   }
 }
 
-// Print current report
 function printCurrentReport() {
   window.print();
 }
 
-// Setup event listeners
+
 function setupEventListeners() {
-  // Logout button
+
   document.getElementById('logoutBtn').addEventListener('click', (e) => {
     e.preventDefault();
     logout();
   });
   
-  // Sidebar toggle
+  
   document.getElementById('sidebarToggle').addEventListener('click', () => {
     document.body.classList.toggle('sidebar-toggled');
   });
   
-  // Inventory filters
+
   document.getElementById('inventoryCategoryFilter').addEventListener('change', loadInventoryReport);
   document.getElementById('inventoryStatusFilter').addEventListener('change', loadInventoryReport);
   document.getElementById('inventoryLocationFilter').addEventListener('change', loadInventoryReport);
   document.getElementById('inventorySortBy').addEventListener('change', loadInventoryReport);
   
-  // Transaction filters
+
   document.getElementById('applyTransactionFilters').addEventListener('click', () => {
-    // Reset to first page
+
     currentTransactionPage = 1;
     
-    // Get filter values
+    
     currentTransactionFilters = {
       type: document.getElementById('transactionTypeFilter').value,
       startDate: document.getElementById('transactionStartDate').value,
       endDate: document.getElementById('transactionEndDate').value
     };
     
-    // Load transactions with filters
+  
     loadTransactionsReport();
   });
   
-  // Export and print buttons
+
   document.getElementById('exportReportBtn').addEventListener('click', exportCurrentReport);
   document.getElementById('printReportBtn').addEventListener('click', printCurrentReport);
 }
@@ -1432,14 +1429,14 @@ function updateMaintenanceHistoryTable(history) {
   let html = '';
   
   history.forEach(transaction => {
-    // Format date
+  
     const date = formatDate(transaction.timestamp);
     
-    // Get item info
+
     const itemName = transaction.item ? transaction.item.name : 'N/A';
     const itemCategory = transaction.item ? transaction.item.category : 'N/A';
     
-    // Get user info
+ 
     const userName = transaction.performedBy ? transaction.performedBy.name : 'N/A';
     
     html += `
@@ -1456,9 +1453,9 @@ function updateMaintenanceHistoryTable(history) {
   tableBody.innerHTML = html;
 }
 
-// Send item to maintenance
+
 async function sendToMaintenance(itemId, itemName) {
-  // Ask for confirmation with notes
+
   const { value: notes } = await Swal.fire({
     title: 'Send to Maintenance',
     text: `Are you sure you want to send "${itemName}" to maintenance?`,
@@ -1474,7 +1471,7 @@ async function sendToMaintenance(itemId, itemName) {
   
   if (notes !== undefined) {
     try {
-      // Create maintenance transaction
+
       const response = await fetchWithAuth(`${API_URL}/items/${itemId}/transaction`, {
         method: 'POST',
         headers: {
@@ -1490,10 +1487,10 @@ async function sendToMaintenance(itemId, itemName) {
       if (!response) return;
       
       if (response.ok) {
-        // Show success message
+     
         showAlert('Item sent to maintenance successfully', 'success');
         
-        // Reload maintenance report
+     
         loadMaintenanceReport();
       } else {
         const errorData = await response.json();
